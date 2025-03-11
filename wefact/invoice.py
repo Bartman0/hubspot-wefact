@@ -31,7 +31,7 @@ def generate_wefact_invoice(invoice_number, company_relatienummer, company_name,
         invoice_date, due_date, line_items_details):
     result = ResultType(data={}, errors=[])
     api_client_invoice = InvoiceClient()
-    invoice_number = f"test3_{invoice_number}"
+    invoice_number = f"test4_{invoice_number}"
     invoice = api_client_invoice.show(invoice_data_id(invoice_number))
     if invoice["status"] != "error":
         result.errors.append("invoice already exists")
