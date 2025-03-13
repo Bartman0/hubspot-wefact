@@ -42,6 +42,9 @@ class InvoiceClient(WeFactBase):
     def add(self, invoice):
         return self.request("add", data=invoice)
 
+    def edit(self, invoice):
+        return self.request("edit", data=invoice)
+
     def download(self, invoice):
         return self.request("download", data=invoice)
 

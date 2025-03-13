@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 from hubspot_api.api import get_api_client, get_invoices, get_invoice_details, get_taxes
 from state.db import init_db, is_invoice_id_in_db, save_invoice_id_in_db
-from wefact.invoice import generate_wefact_invoice
+from wefact.invoice import generate_invoice, update_invoice, invoice_update_paid
 
 GROOTBOEKREKENING_DEBITEUREN = "1300"
 
@@ -25,20 +25,22 @@ def main():
                 (invoice_number, invoice_status, company_relatienummer, company_name, due_date, invoice_date, amount_billed,
                  line_items_details, next_invoice) = get_invoice_details(api_client, invoices, invoice)
 
-                if invoice_status != "open" or company_relatienummer is None:
-                    logger.warning(
-                        f"skipping invoice {invoice_number}[{invoice.id}] with status {invoice_status}"
-                    )
-                    continue
                 if is_invoice_id_in_db(connection, invoice.id, invoice_status):
                     logger.info(
                         f"invoice already processed, skipping invoice {invoice_number}[{invoice.id}]"
                     )
                     continue
-                logger.debug(f"line items details: {line_items_details}")
-
-                result = generate_wefact_invoice(invoice_number, company_relatienummer, company_name, amount_billed,
-                                                 invoice_date, due_date, tax_rates, line_items_details)
+                if invoice_status == "paid":
+                    result = invoice_update_paid(invoice_number)
+                else:
+                    if invoice_status != "open" or company_relatienummer is None:
+                        logger.warning(
+                            f"skipping invoice {invoice_number}[{invoice.id}] with status {invoice_status}"
+                        )
+                        continue
+                    logger.debug(f"line items details: {line_items_details}")
+                    result = generate_invoice(invoice_number, company_relatienummer, company_name, amount_billed,
+                                              invoice_date, due_date, tax_rates, line_items_details)
                 if len(result.errors) > 0:
                     logger.error(f"HubSpot invoice {invoice_number}[{invoice.id}] with status {invoice_status} not saved in state database")
                     continue

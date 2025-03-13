@@ -24,14 +24,27 @@ def invoice_data_id(code):
 def invoice_data(code, debtor, invoice_date, term, invoice_lines):
     return {"InvoiceCode": code, "Status": int(InvoiceStatus.Verzonden), "DebtorCode": debtor, "Date": invoice_date.strftime("%Y-%m-%d"), "Term": term, "InvoiceLines": invoice_lines}
 
+def invoice_update_paid(code):
+    return {"InvoiceCode": code, "Status": int(InvoiceStatus.Betaald)}
+
 def invoice_line_data(code, number, amount, description, tax_rate_percentage):
     return {"ProductCode": code, "Number": number, "TaxPercentage": tax_rate_percentage}
 
-def generate_wefact_invoice(invoice_number, company_relatienummer, company_name, amount_billed,
-        invoice_date, due_date, tax_rates, line_items_details):
+def update_invoice(invoice_number, invoice_status):
     result = ResultType(data={}, errors=[])
     api_client_invoice = InvoiceClient()
-    invoice_number = f"test9_{invoice_number}"
+    invoice_number = f"testA_{invoice_number}"
+    invoice = api_client_invoice.edit(invoice_data_id(invoice_number))
+    if invoice["status"] != "error":
+        result.errors.append("invoice already exists")
+        return result
+    return result
+
+def generate_invoice(invoice_number, company_relatienummer, company_name, amount_billed,
+                     invoice_date, due_date, tax_rates, line_items_details):
+    result = ResultType(data={}, errors=[])
+    api_client_invoice = InvoiceClient()
+    invoice_number = f"testA_{invoice_number}"
     invoice = api_client_invoice.show(invoice_data_id(invoice_number))
     if invoice["status"] != "error":
         result.errors.append("invoice already exists")
@@ -56,9 +69,9 @@ def generate_wefact_invoice(invoice_number, company_relatienummer, company_name,
     if invoice["status"] == "error":
         result.errors.append("error processing invoice")
         return result
-    send_result = api_client_invoice.download(invoice_data_id(invoice_number))
+    download_result = api_client_invoice.download(invoice_data_id(invoice_number))
     if invoice["status"] == "success":
-        pdf = base64.b64decode(send_result["invoice"]["Base64"])
+        pdf = base64.b64decode(download_result["invoice"]["Base64"])
         with open("test.pdf", "w+b") as f:
             f.write(pdf)
     return result
