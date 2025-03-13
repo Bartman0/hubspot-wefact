@@ -2,6 +2,7 @@ import logging
 
 import os
 import datetime
+import requests
 
 from hubspot.crm.associations import BatchInputPublicObjectId
 from urllib3 import Retry
@@ -25,6 +26,14 @@ def get_api_client():
     api_client = HubSpot(retry=retry)
     api_client.access_token = get_access_token_hubspot()
     return api_client
+
+
+def get_taxes():
+    endpoint = "https://api.hubapi.com/tax-rates/v1/tax-rates"
+    headers = {"Authorization": "Bearer " +str(os.environ["HUBSPOT_ACCESS_TOKEN"])}
+    response = requests.get(endpoint, headers=headers)
+    return {tax["id"]: {"name": tax["name"], "percentageRate": tax["percentageRate"], "id": tax["id"], "label": tax["label"]}
+            for tax in response.json()["results"]}
 
 
 def get_invoices(api_client, after):
@@ -106,6 +115,7 @@ def get_invoice_details(api_client, invoices, invoice):
                     "gewicht",
                     "artikelsoort",
                     "artikelgroep",
+                    "hs_tax_rate_group_id"
                 ],
             )
             details = {key: line_item.properties[key] for key in line_item.properties.keys()}

@@ -1,3 +1,4 @@
+import base64
 from collections import namedtuple
 
 from wefact.api import InvoiceClient, DebtorClient, ProductClient
@@ -23,15 +24,14 @@ def invoice_data_id(code):
 def invoice_data(code, debtor, invoice_date, term, invoice_lines):
     return {"InvoiceCode": code, "Status": int(InvoiceStatus.Verzonden), "DebtorCode": debtor, "Date": invoice_date.strftime("%Y-%m-%d"), "Term": term, "InvoiceLines": invoice_lines}
 
-def invoice_line_data(code, number, amount, description):
-    return {"ProductCode": code, "Number": number}
-
+def invoice_line_data(code, number, amount, description, tax_rate_percentage):
+    return {"ProductCode": code, "Number": number, "TaxPercentage": tax_rate_percentage}
 
 def generate_wefact_invoice(invoice_number, company_relatienummer, company_name, amount_billed,
-        invoice_date, due_date, line_items_details):
+        invoice_date, due_date, tax_rates, line_items_details):
     result = ResultType(data={}, errors=[])
     api_client_invoice = InvoiceClient()
-    invoice_number = f"test4_{invoice_number}"
+    invoice_number = f"test9_{invoice_number}"
     invoice = api_client_invoice.show(invoice_data_id(invoice_number))
     if invoice["status"] != "error":
         result.errors.append("invoice already exists")
@@ -49,11 +49,16 @@ def generate_wefact_invoice(invoice_number, company_relatienummer, company_name,
     # now build the invoice line items
     invoice_lines = []
     for line_item in line_items_details:
-        invoice_lines.append(invoice_line_data(line_item["hs_sku"], line_item["quantity"], line_item["amount"], line_item["name"]))
+        tax_rate_percentage = tax_rates[line_item["hs_tax_rate_group_id"]]["percentageRate"] if line_item["hs_tax_rate_group_id"] else 0
+        invoice_lines.append(invoice_line_data(line_item["hs_sku"], line_item["quantity"], line_item["amount"], line_item["name"], tax_rate_percentage))
     term = (due_date - invoice_date).days
     invoice = api_client_invoice.add(invoice_data(invoice_number, company_relatienummer, invoice_date, term, invoice_lines))
     if invoice["status"] == "error":
         result.errors.append("error processing invoice")
         return result
-
+    send_result = api_client_invoice.download(invoice_data_id(invoice_number))
+    if invoice["status"] == "success":
+        pdf = base64.b64decode(send_result["invoice"]["Base64"])
+        with open("test.pdf", "w+b") as f:
+            f.write(pdf)
     return result
