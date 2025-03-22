@@ -35,7 +35,7 @@ def main():
                 else:
                     if invoice_status != "open" or company_relatienummer is None:
                         logger.warning(
-                            f"skipping invoice {invoice_number}[{invoice.id}] with status {invoice_status}"
+                            f"skipping invoice {invoice_number}[{invoice.id}] with status {invoice_status}, company relation nr {company_relatienummer}"
                         )
                         continue
                     logger.debug(f"line items details: {line_items_details}")

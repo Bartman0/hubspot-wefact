@@ -1,5 +1,6 @@
 import base64
 from collections import namedtuple
+import datetime
 
 from wefact.api import InvoiceClient, DebtorClient, ProductClient
 from wefact.debtor import debtor_data_id, debtor_data_add
@@ -25,7 +26,9 @@ def invoice_data(code, debtor, invoice_date, term, invoice_lines):
     return {"InvoiceCode": code, "Status": int(InvoiceStatus.Verzonden), "DebtorCode": debtor, "Date": invoice_date.strftime("%Y-%m-%d"), "Term": term, "InvoiceLines": invoice_lines}
 
 def invoice_update_paid(code):
-    return {"InvoiceCode": code, "Status": int(InvoiceStatus.Betaald)}
+    result = ResultType(data=[], errors=[])
+    result.data.append({"InvoiceCode": code, "Status": int(InvoiceStatus.Betaald)})
+    return result
 
 def invoice_line_data(code, number, amount, description, tax_rate_percentage):
     return {"ProductCode": code, "Number": number, "TaxPercentage": tax_rate_percentage}
@@ -42,9 +45,10 @@ def update_invoice(invoice_number, invoice_status):
 
 def generate_invoice(invoice_number, company_relatienummer, company_name, amount_billed,
                      invoice_date, due_date, tax_rates, line_items_details):
+    current_date = datetime.datetime.now().strftime("%Y%m%d")
     result = ResultType(data={}, errors=[])
     api_client_invoice = InvoiceClient()
-    invoice_number = f"testA_{invoice_number}"
+    invoice_number = f"test_{current_date}_{invoice_number}"
     invoice = api_client_invoice.show(invoice_data_id(invoice_number))
     if invoice["status"] != "error":
         result.errors.append("invoice already exists")
@@ -72,6 +76,6 @@ def generate_invoice(invoice_number, company_relatienummer, company_name, amount
     download_result = api_client_invoice.download(invoice_data_id(invoice_number))
     if invoice["status"] == "success":
         pdf = base64.b64decode(download_result["invoice"]["Base64"])
-        with open("test.pdf", "w+b") as f:
+        with open(f"{invoice_number}.pdf", "w+b") as f:
             f.write(pdf)
     return result
