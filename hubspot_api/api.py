@@ -79,19 +79,28 @@ def get_invoice_details(api_client, invoices, invoice):
     )
     invoice_companies_dict = invoice_companies.to_dict()
     if invoice_companies_dict.get("num_errors", -1) > 0:
-        logger.error(f"{invoice_companies_dict['errors'][0]['message']}")
+        error_messages = [error['message'] for error in invoice_companies_dict['errors']]
+        logger.error(f"{' - \n'.join(error_messages)}")
         company_relatienummer = None
         company_name = None
+        company_address = None
+        company_zipcode = None
+        company_city = None
+        company_email = None
     else:
         company_id = invoice_companies.results[0].to[0].id
         company = api_companies.get_by_id(
-            company_id=company_id, properties=["relatie_nummer", "name"]
+            company_id=company_id, properties=["relatie_nummer", "name", "address", "zip", "city", "email"]
         )
         logger.info(
             f"company {company.properties['name']}[{company.id}] was retrieved"
         )
         company_relatienummer = company.properties["relatie_nummer"] if "relatie_nummer" in company.properties else None
         company_name = company.properties["name"]
+        company_address = company.properties["address"]
+        company_zipcode = company.properties["zip"]
+        company_city = company.properties["city"]
+        company_email = company.properties["email"]
 
     invoice_line_items = api_client.crm.associations.batch_api.read(
         from_object_type="invoice",
@@ -125,5 +134,6 @@ def get_invoice_details(api_client, invoices, invoice):
 
     after = invoices.paging.next.after if invoices.paging else None
 
-    return (invoice_number, invoice_status, company_relatienummer, company_name, due_date, invoice_date, amount_billed,
-                 line_items_details, after)
+    return (invoice_number, invoice_status, due_date, invoice_date, amount_billed,
+            company_relatienummer, company_name, company_address, company_zipcode, company_city, company_email,
+            line_items_details, after)

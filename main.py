@@ -22,7 +22,8 @@ def main():
         while True:
             invoices = get_invoices(api_client, next_invoice)
             for invoice in invoices.results:
-                (invoice_number, invoice_status, company_relatienummer, company_name, due_date, invoice_date, amount_billed,
+                (invoice_number, invoice_status, due_date, invoice_date, amount_billed,
+                 company_relatienummer, company_name, company_address, company_zipcode, company_city, company_email,
                  line_items_details, next_invoice) = get_invoice_details(api_client, invoices, invoice)
 
                 if is_invoice_id_in_db(connection, invoice.id, invoice_status):
@@ -39,8 +40,9 @@ def main():
                         )
                         continue
                     logger.debug(f"line items details: {line_items_details}")
-                    result = generate_invoice(invoice_number, company_relatienummer, company_name, amount_billed,
-                                              invoice_date, due_date, tax_rates, line_items_details)
+                    result = generate_invoice(invoice_number, amount_billed, invoice_date, due_date,
+                                              company_relatienummer, company_name, company_address, company_zipcode, company_city, company_email,
+                                              tax_rates, line_items_details)
                 if len(result.errors) > 0:
                     logger.error(f"HubSpot invoice {invoice_number}[{invoice.id}] with status {invoice_status} not saved in state database")
                     continue

@@ -43,8 +43,9 @@ def update_invoice(invoice_number, invoice_status):
         return result
     return result
 
-def generate_invoice(invoice_number, company_relatienummer, company_name, amount_billed,
-                     invoice_date, due_date, tax_rates, line_items_details):
+def generate_invoice(invoice_number, amount_billed, invoice_date, due_date,
+                     company_relatienummer, company_name, company_address, company_zipcode, company_city, company_email,
+                     tax_rates, line_items_details):
     current_date = datetime.datetime.now().strftime("%Y%m%d")
     result = ResultType(data={}, errors=[])
     api_client_invoice = InvoiceClient()
@@ -56,13 +57,13 @@ def generate_invoice(invoice_number, company_relatienummer, company_name, amount
     api_client_debtor = DebtorClient()
     company = api_client_debtor.show(debtor_data_id(company_relatienummer))
     if company["status"] == "error":
-        api_client_debtor.add(debtor_data_add(company_relatienummer, company_name))
+        api_client_debtor.add(debtor_data_add(company_relatienummer, company_name, company_address, company_zipcode, company_city, company_email))
     api_client_product = ProductClient()
     for line_item in line_items_details:
         # TODO handle price changes for already registered SKU's
         product = api_client_product.show(product_data_id(line_item['hs_sku']))
         if product["status"] == "error":
-            api_client_product.add(product_data_add(line_item["hs_sku"], line_item["name"], f"{line_item['name']} [{line_item['voorraadnummer']}]", line_item["amount"]))
+            api_client_product.add(product_data_add(line_item["hs_sku"], line_item["name"], {line_item['name']}, line_item["amount"]))
     # now build the invoice line items
     invoice_lines = []
     for line_item in line_items_details:
