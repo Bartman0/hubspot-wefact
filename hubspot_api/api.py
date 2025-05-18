@@ -1,12 +1,13 @@
 import logging
-
+import json
 import os
-import datetime
+from datetime import datetime, timedelta
 import requests
 
 from hubspot.crm.associations import BatchInputPublicObjectId
 from urllib3 import Retry
 from hubspot import HubSpot
+from hubspot.crm.objects.tasks import SimplePublicObjectInputForCreate
 
 
 logging.basicConfig(level=logging.INFO)
@@ -23,8 +24,7 @@ def get_api_client():
         backoff_factor=1,
         status_forcelist=(500, 502, 504),
     )
-    api_client = HubSpot(retry=retry)
-    api_client.access_token = get_access_token_hubspot()
+    api_client = HubSpot(access_token=get_access_token_hubspot(), retry=retry)
     return api_client
 
 
@@ -36,20 +36,32 @@ def get_taxes():
             for tax in response.json()["results"]}
 
 
-def get_invoices(api_client, after):
-    api_invoices = api_client.crm.invoices.basic_api
-    invoices = api_invoices.get_crm_v3_objects_invoices(
-        limit=5,
-        after=after,
-        properties=[
-            "hs_invoice_status",
-            "hs_amount_billed",
-            "hs_balance_due",
-            "hs_invoice_date",
-            "hs_due_date",
-            "hs_number",
-        ]
-    )
+def upload_invoice(filename, contents):
+    endpoint = "https://api.hubapi.com/files/v3/files"
+    headers = {"Authorization": "Bearer " +str(os.environ["HUBSPOT_ACCESS_TOKEN"])}
+    response = requests.post(endpoint, headers=headers,
+                             data={"file": contents, "folderPath": "/invoices", "fileName": filename})
+    result = response.json()
+    return {"id": result["id"], "url": result["url"]}
+
+
+def associate_company_to_file(company_id, file_id):
+    # https: // api.hubapi.com / crm / v4 / objects / {objectType} / {objectId} / associations / {toObjectType} / {
+    #     toObjectId}
+    pass
+
+
+def  get_invoices(api_client: HubSpot, after):
+    api_invoices = api_client.crm.commerce.invoices.basic_api
+    properties=[
+        "hs_invoice_status",
+        "hs_amount_billed",
+        "hs_balance_due",
+        "hs_invoice_date",
+        "hs_due_date",
+        "hs_number",
+    ]
+    invoices = api_client.crm.commerce.invoices.basic_api.get_page(after=after, properties=properties)
     return invoices
 
 
@@ -64,10 +76,10 @@ def get_invoice_details(api_client, invoices, invoice):
     )
 
     amount_billed = invoice.properties["hs_amount_billed"]
-    invoice_date = datetime.datetime.fromisoformat(
+    invoice_date = datetime.fromisoformat(
         str(invoice.properties["hs_invoice_date"])
     )
-    due_date = datetime.datetime.fromisoformat(
+    due_date = datetime.fromisoformat(
         str(invoice.properties["hs_due_date"])
     )
 
@@ -77,6 +89,7 @@ def get_invoice_details(api_client, invoices, invoice):
         to_object_type="companies",
         batch_input_public_object_id=batch_ids,
     )
+    company_id = None
     invoice_companies_dict = invoice_companies.to_dict()
     if invoice_companies_dict.get("num_errors", -1) > 0:
         error_messages = [error['message'] for error in invoice_companies_dict['errors']]
@@ -128,6 +141,7 @@ def get_invoice_details(api_client, invoices, invoice):
                 ],
             )
             details = {key: line_item.properties[key] for key in line_item.properties.keys()}
+            # fix types
             details["quantity"] = int(details["quantity"])
             details["amount"] = float(details["amount"])
             line_items_details.append(details)
@@ -135,5 +149,26 @@ def get_invoice_details(api_client, invoices, invoice):
     after = invoices.paging.next.after if invoices.paging else None
 
     return (invoice_number, invoice_status, due_date, invoice_date, amount_billed,
-            company_relatienummer, company_name, company_address, company_zipcode, company_city, company_email,
+            company_id, company_relatienummer, company_name, company_address, company_zipcode, company_city, company_email,
             line_items_details, after)
+
+
+def create_task(api_client, company_id, title, description):
+    api_tasks = api_client.crm.objects.tasks.basic_api
+    task = SimplePublicObjectInputForCreate(properties={
+        "hs_task_subject": title,
+        "hs_task_body": description,
+        "hs_task_status": "WAITING",
+        "hs_task_priority": "HIGH",
+        "hs_timestamp": int((datetime.now() + timedelta(days=1)).timestamp()*1000)
+    }, associations=[
+        {"types": [
+            {
+                "associationCategory": "HUBSPOT_DEFINED",
+                "associationTypeId": 192
+            }
+        ],
+        "to": {"id": company_id}}
+    ])
+    response = api_tasks.create(task)
+    return response

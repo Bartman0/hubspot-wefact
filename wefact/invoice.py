@@ -77,6 +77,5 @@ def generate_invoice(invoice_number, amount_billed, invoice_date, due_date,
     download_result = api_client_invoice.download(invoice_data_id(invoice_number))
     if invoice["status"] == "success":
         pdf = base64.b64decode(download_result["invoice"]["Base64"])
-        with open(f"{invoice_number}.pdf", "w+b") as f:
-            f.write(pdf)
+        result.data["pdf"] = pdf
     return result

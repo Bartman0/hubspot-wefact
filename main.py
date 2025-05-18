@@ -2,7 +2,8 @@ import logging
 
 from dotenv import load_dotenv
 
-from hubspot_api.api import get_api_client, get_invoices, get_invoice_details, get_taxes
+from hubspot_api.api import get_api_client, get_invoices, get_invoice_details, get_taxes, create_task, upload_invoice, \
+    associate_company_to_file
 from state.db import init_db, is_invoice_id_in_db, save_invoice_id_in_db
 from wefact.invoice import generate_invoice, update_invoice, invoice_update_paid
 
@@ -23,7 +24,7 @@ def main():
             invoices = get_invoices(api_client, next_invoice)
             for invoice in invoices.results:
                 (invoice_number, invoice_status, due_date, invoice_date, amount_billed,
-                 company_relatienummer, company_name, company_address, company_zipcode, company_city, company_email,
+                 company_id, company_relatienummer, company_name, company_address, company_zipcode, company_city, company_email,
                  line_items_details, next_invoice) = get_invoice_details(api_client, invoices, invoice)
 
                 if is_invoice_id_in_db(connection, invoice.id, invoice_status):
@@ -38,6 +39,9 @@ def main():
                         logger.warning(
                             f"skipping invoice {invoice_number}[{invoice.id}] with status {invoice_status}, company relation nr {company_relatienummer}"
                         )
+                        create_task(api_client, company_id,
+                                    f"company relatienummer {company_relatienummer} voor factuur {invoice_number} is niet gevuld",
+                                    f"het relatienummer voor de company op factuur {invoice_number}[{invoice.id}] moet nog gezet worden.")
                         continue
                     logger.debug(f"line items details: {line_items_details}")
                     result = generate_invoice(invoice_number, amount_billed, invoice_date, due_date,
@@ -46,6 +50,9 @@ def main():
                 if len(result.errors) > 0:
                     logger.error(f"HubSpot invoice {invoice_number}[{invoice.id}] with status {invoice_status} not saved in state database")
                     continue
+                filename = f"{invoice_number}.pdf"
+                (file_id, url) = upload_invoice(filename, result.data["pdf"])
+                associate_company_to_file(company_id, file_id)
                 save_invoice_id_in_db(connection, invoice.id, invoice_status)
 
             if not next_invoice:
