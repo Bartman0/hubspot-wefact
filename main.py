@@ -3,7 +3,7 @@ import logging
 from dotenv import load_dotenv
 
 from hubspot_api.api import get_api_client, get_invoices, get_invoice_details, get_taxes, create_task, upload_invoice, \
-    associate_company_to_file
+    associate_file_to_company
 from state.db import init_db, is_invoice_id_in_db, save_invoice_id_in_db
 from wefact.invoice import generate_invoice, update_invoice, invoice_update_paid
 
@@ -17,8 +17,8 @@ logger = logging.getLogger()
 
 def main():
     with (init_db() as connection):
-        tax_rates = get_taxes()
         api_client = get_api_client()
+        tax_rates = get_taxes(api_client)
         next_invoice = None
         while True:
             invoices = get_invoices(api_client, next_invoice)
@@ -51,8 +51,8 @@ def main():
                     logger.error(f"HubSpot invoice {invoice_number}[{invoice.id}] with status {invoice_status} not saved in state database")
                     continue
                 filename = f"{invoice_number}.pdf"
-                (file_id, url) = upload_invoice(filename, result.data["pdf"])
-                associate_company_to_file(company_id, file_id)
+                result = upload_invoice(api_client, filename, result.data["pdf"])
+                associate_file_to_company(api_client, company_id, f"{filename} {result["url"]}", result["id"])
                 save_invoice_id_in_db(connection, invoice.id, invoice_status)
 
             if not next_invoice:

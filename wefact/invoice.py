@@ -63,12 +63,12 @@ def generate_invoice(invoice_number, amount_billed, invoice_date, due_date,
         # TODO handle price changes for already registered SKU's
         product = api_client_product.show(product_data_id(line_item['hs_sku']))
         if product["status"] == "error":
-            api_client_product.add(product_data_add(line_item["hs_sku"], line_item["name"], {line_item['name']}, line_item["amount"]))
+            api_client_product.add(product_data_add(line_item["hs_sku"], line_item["name"], line_item["name"], line_item["price"]))
     # now build the invoice line items
     invoice_lines = []
     for line_item in line_items_details:
         tax_rate_percentage = tax_rates[line_item["hs_tax_rate_group_id"]]["percentageRate"] if line_item["hs_tax_rate_group_id"] else 0
-        invoice_lines.append(invoice_line_data(line_item["hs_sku"], line_item["quantity"], line_item["amount"], line_item["name"], tax_rate_percentage))
+        invoice_lines.append(invoice_line_data(line_item["hs_sku"], line_item["quantity"], line_item["price"], line_item["name"], tax_rate_percentage))
     term = (due_date - invoice_date).days
     invoice = api_client_invoice.add(invoice_data(invoice_number, company_relatienummer, invoice_date, term, invoice_lines))
     if invoice["status"] == "error":

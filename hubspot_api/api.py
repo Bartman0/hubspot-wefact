@@ -2,12 +2,15 @@ import logging
 import json
 import os
 from datetime import datetime, timedelta
+
+import hubspot.files.api.files_api
 import requests
 
 from hubspot.crm.associations import BatchInputPublicObjectId
 from urllib3 import Retry
 from hubspot import HubSpot
-from hubspot.crm.objects.tasks import SimplePublicObjectInputForCreate
+from hubspot.crm.objects.tasks import SimplePublicObjectInputForCreate as tasks_spoifc
+from hubspot.crm.objects.notes import SimplePublicObjectInputForCreate as notes_spoifc
 
 
 logging.basicConfig(level=logging.INFO)
@@ -28,7 +31,7 @@ def get_api_client():
     return api_client
 
 
-def get_taxes():
+def get_taxes(api_client):
     endpoint = "https://api.hubapi.com/tax-rates/v1/tax-rates"
     headers = {"Authorization": "Bearer " +str(os.environ["HUBSPOT_ACCESS_TOKEN"])}
     response = requests.get(endpoint, headers=headers)
@@ -36,19 +39,23 @@ def get_taxes():
             for tax in response.json()["results"]}
 
 
-def upload_invoice(filename, contents):
-    endpoint = "https://api.hubapi.com/files/v3/files"
-    headers = {"Authorization": "Bearer " +str(os.environ["HUBSPOT_ACCESS_TOKEN"])}
-    response = requests.post(endpoint, headers=headers,
-                             data={"file": contents, "folderPath": "/invoices", "fileName": filename})
-    result = response.json()
-    return {"id": result["id"], "url": result["url"]}
+def upload_invoice(api_client, filename, data):
+    with open(filename, "wb") as file:
+        file.write(data)
+    options = json.dumps({"access": "PUBLIC_INDEXABLE", "overwrite": True})
+    response = api_client.files.files_api.upload(
+        file=filename,
+        file_name=filename,
+        folder_path="/invoices",
+        options=options
+    )
+    if response is None:
+        return {"id": None, "url": None}
+    return {"id": response.id, "url": response.url}
 
 
-def associate_company_to_file(company_id, file_id):
-    # https: // api.hubapi.com / crm / v4 / objects / {objectType} / {objectId} / associations / {toObjectType} / {
-    #     toObjectId}
-    pass
+def associate_file_to_company(api_client, company_id, title, file_id):
+    return create_note(api_client, company_id, title, file_id)
 
 
 def  get_invoices(api_client: HubSpot, after):
@@ -130,6 +137,7 @@ def get_invoice_details(api_client, invoices, invoice):
                     "hs_sku",
                     "amount",
                     "quantity",
+                    "price",
                     "voorraadnummer",
                     "name",
                     "kostenplaats",
@@ -144,6 +152,7 @@ def get_invoice_details(api_client, invoices, invoice):
             # fix types
             details["quantity"] = int(details["quantity"])
             details["amount"] = float(details["amount"])
+            details["price"] = float(details["price"])
             line_items_details.append(details)
 
     after = invoices.paging.next.after if invoices.paging else None
@@ -155,7 +164,7 @@ def get_invoice_details(api_client, invoices, invoice):
 
 def create_task(api_client, company_id, title, description):
     api_tasks = api_client.crm.objects.tasks.basic_api
-    task = SimplePublicObjectInputForCreate(properties={
+    task = tasks_spoifc(properties={
         "hs_task_subject": title,
         "hs_task_body": description,
         "hs_task_status": "WAITING",
@@ -171,4 +180,23 @@ def create_task(api_client, company_id, title, description):
         "to": {"id": company_id}}
     ])
     response = api_tasks.create(task)
+    return response
+
+
+def create_note(api_client, company_id, title, file_id):
+    api_notes = api_client.crm.objects.notes.basic_api
+    note = notes_spoifc(properties={
+        "hs_attachment_ids": f"{file_id}",
+        "hs_note_body": title,
+        "hs_timestamp": int(datetime.now().timestamp()*1000)
+    }, associations=[
+        {"types": [
+            {
+                "associationCategory": "HUBSPOT_DEFINED",
+                "associationTypeId": 190
+            }
+        ],
+        "to": {"id": company_id}}
+    ])
+    response = api_notes.create(note)
     return response
