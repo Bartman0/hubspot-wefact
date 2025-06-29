@@ -23,38 +23,42 @@ def main():
         api_client = get_api_client()
         next_invoice = None
         while True:
-            invoices, next_invoice = get_invoices(api_client, next_invoice)
-            for invoice in invoices:
-                (invoice, company) = get_invoice_details(api_client, invoice)
-
-                if is_invoice_id_in_db(connection, invoice):
-                    logger.info(
-                        f"invoice already processed, skipping invoice {invoice.number}[{invoice.id}]"
-                    )
-                    continue
-                if invoice.status == INVOICE_STATUS_PAID:
-                    result = invoice_update_paid(invoice.number)
-                else:
-                    if invoice.status != INVOICE_STATUS_OPEN or company.relatienummer is None:
-                        logger.warning(
-                            f"skipping invoice {invoice.number}[{invoice.id}] with status {invoice.status}, company relation nr {company.relatienummer}"
-                        )
-                        create_task(api_client, company_id,
-                                    f"company relatienummer {company.relatienummer} voor factuur {invoice.number} is niet gevuld",
-                                    f"het relatienummer voor de company op factuur {invoice.number}[{invoice.id}] moet nog gezet worden.")
-                        continue
-                    result = generate_invoice(invoice, company)
-                if len(result.errors) > 0:
-                    logger.error(f"HubSpot invoice {invoice.number}[{invoice.id}] with status {invoice.status} not saved in state database")
-                    logger.error(f"error: {result.errors}")
-                    continue
-                filename = f"{invoice.number}.pdf"
-                result = upload_invoice(api_client, filename, result.data["pdf"])
-                associate_file_to_company(api_client, company.id, f"{filename} {result["url"]}", result["id"])
-                save_invoice_id_in_db(connection, invoice)
-
+            next_invoice = process_batch_of_invoices(api_client, connection, next_invoice)
             if not next_invoice:
                 break
+
+
+def process_batch_of_invoices(api_client, connection, next_invoice):
+    invoices, next_invoice = get_invoices(api_client, next_invoice)
+    for invoice in invoices:
+        (invoice, company) = get_invoice_details(api_client, invoice)
+        if is_invoice_id_in_db(connection, invoice):
+            logger.info(
+                f"invoice already processed, skipping invoice {invoice.number}[{invoice.id}]"
+            )
+            continue
+        # verwerk alleen facturen met PAID of OPEN status
+        if invoice.status == INVOICE_STATUS_PAID:
+            result = invoice_update_paid(invoice.number)
+        else:
+            if invoice.status != INVOICE_STATUS_OPEN:
+                continue
+            result = generate_invoice(invoice, company)
+        if len(result.errors) > 0:
+            logger.error(
+                f"HubSpot invoice {invoice.number}[{invoice.id}] with status {invoice.status} not saved in state database")
+            logger.error(f"error: {result.errors}")
+            continue
+        pdf_data = result.data["pdf"]
+        save_invoice_pdf(api_client, company, invoice, pdf_data)
+        save_invoice_id_in_db(connection, invoice)
+    return next_invoice
+
+
+def save_invoice_pdf(api_client, company, invoice, pdf_data):
+    filename = f"{invoice.number}.pdf"
+    result = upload_invoice(api_client, filename, pdf_data)
+    associate_file_to_company(api_client, company.id, f"{filename} {result["url"]}", result["id"])
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 
 import requests
 from hubspot import HubSpot
@@ -71,15 +71,15 @@ def get_invoices(api_client: HubSpot, after):
         "hs_number",
     ]
 
-    invoices_hubspot = api_client.crm.commerce.invoices.basic_api.get_page(after=after, properties=properties)
+    invoices_hubspot = api_invoices.get_page(after=after, properties=properties)
     invoices = [Invoice(id=invoice.id,
                         number=invoice.properties["hs_number"],
                         status=invoice.properties["hs_invoice_status"],
                         amount_billed=invoice.properties["hs_amount_billed"],
-                        invoice_date = datetime.fromisoformat(
+                        invoice_date=datetime.fromisoformat(
                             str(invoice.properties["hs_invoice_date"])
                         ).date(),
-                        due_date = datetime.fromisoformat(
+                        due_date=datetime.fromisoformat(
                             str(invoice.properties["hs_due_date"])
                         ).date())
                 for invoice in invoices_hubspot.results]
@@ -150,11 +150,8 @@ def get_invoice_details(api_client, invoice: Invoice):
             line_item_args["quantity"] = int(line_item_args["quantity"])
             line_item_args["amount"] = float(line_item_args["amount"])
             line_item_args["price"] = float(line_item_args["price"])
-            line_item_args["btw"] = float((line_item_args.get("btw", 0)) or 0)*100
+            line_item_args["btw"] = float((line_item_args.get("btw", 0)) or 0) * 100
             invoice.line_items.append(LineItem(**line_item_args))
-
-
-
     return invoice, company
 
 

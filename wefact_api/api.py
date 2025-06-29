@@ -1,9 +1,9 @@
-import logging
-
-import os
 import json
-import requests
+import logging
+import os
 from abc import ABC
+
+import requests
 
 WEFACT_API_URL: str = "https://api.mijnwefact.nl/v2/"
 WEFACT_API_KEY: str = os.environ["WEFACT_API_KEY"]
@@ -18,11 +18,7 @@ class WeFactBase(ABC):
         self._controller = None
 
     def _build_request(self, action):
-        return {
-            "api_key": WEFACT_API_KEY,
-            "controller": self._controller,
-            "action": action,
-        }
+        return {"api_key": WEFACT_API_KEY, "controller": self._controller, "action": action, }
 
     def request(self, action, data: dict):
         return requests.post(self._url, data=json.dumps(self._build_request(action) | data)).json()

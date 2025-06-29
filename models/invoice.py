@@ -1,6 +1,5 @@
-from typing import List
-
 from pydantic import BaseModel, condate
+from typing import List
 from models.line_item import LineItem
 
 
