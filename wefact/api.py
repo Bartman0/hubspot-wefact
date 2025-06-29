@@ -80,3 +80,6 @@ class ProductClient(WeFactBase):
 
     def add(self, product):
         return self.request("add", data=product)
+
+    def edit(self, product):
+        return self.request("edit", data=product)

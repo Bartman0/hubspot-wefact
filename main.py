@@ -18,7 +18,6 @@ logger = logging.getLogger()
 def main():
     with (init_db() as connection):
         api_client = get_api_client()
-        tax_rates = get_taxes(api_client)
         next_invoice = None
         while True:
             invoices = get_invoices(api_client, next_invoice)
@@ -46,9 +45,10 @@ def main():
                     logger.debug(f"line items details: {line_items_details}")
                     result = generate_invoice(invoice_number, amount_billed, invoice_date, due_date,
                                               company_relatienummer, company_name, company_address, company_zipcode, company_city, company_email,
-                                              tax_rates, line_items_details)
+                                              line_items_details)
                 if len(result.errors) > 0:
                     logger.error(f"HubSpot invoice {invoice_number}[{invoice.id}] with status {invoice_status} not saved in state database")
+                    logger.error(f"error: {result.errors}")
                     continue
                 filename = f"{invoice_number}.pdf"
                 result = upload_invoice(api_client, filename, result.data["pdf"])

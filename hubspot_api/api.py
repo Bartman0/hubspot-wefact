@@ -12,7 +12,6 @@ from hubspot import HubSpot
 from hubspot.crm.objects.tasks import SimplePublicObjectInputForCreate as tasks_spoifc
 from hubspot.crm.objects.notes import SimplePublicObjectInputForCreate as notes_spoifc
 
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
 
@@ -33,9 +32,10 @@ def get_api_client():
 
 def get_taxes(api_client):
     endpoint = "https://api.hubapi.com/tax-rates/v1/tax-rates"
-    headers = {"Authorization": "Bearer " +str(os.environ["HUBSPOT_ACCESS_TOKEN"])}
+    headers = {"Authorization": "Bearer " + str(os.environ["HUBSPOT_ACCESS_TOKEN"])}
     response = requests.get(endpoint, headers=headers)
-    return {tax["id"]: {"name": tax["name"], "percentageRate": tax["percentageRate"], "id": tax["id"], "label": tax["label"]}
+    return {tax["id"]: {"name": tax["name"], "percentageRate": tax["percentageRate"], "id": tax["id"],
+                        "label": tax["label"]}
             for tax in response.json()["results"]}
 
 
@@ -58,9 +58,9 @@ def associate_file_to_company(api_client, company_id, title, file_id):
     return create_note(api_client, company_id, title, file_id)
 
 
-def  get_invoices(api_client: HubSpot, after):
+def get_invoices(api_client: HubSpot, after):
     api_invoices = api_client.crm.commerce.invoices.basic_api
-    properties=[
+    properties = [
         "hs_invoice_status",
         "hs_amount_billed",
         "hs_balance_due",
@@ -115,7 +115,8 @@ def get_invoice_details(api_client, invoices, invoice):
         logger.info(
             f"company {company.properties['name']}[{company.id}] was retrieved"
         )
-        company_relatienummer = company.properties["relatie_nummer"] if "relatie_nummer" in company.properties else None
+        # gebruik het company_id als het relatie_nummer niet gevonden kan worden of leeg is
+        company_relatienummer = company.properties.get("relatie_nummer", company_id) or company_id
         company_name = company.properties["name"]
         company_address = company.properties["address"]
         company_zipcode = company.properties["zip"]
@@ -145,7 +146,8 @@ def get_invoice_details(api_client, invoices, invoice):
                     "gewicht",
                     "artikelsoort",
                     "artikelgroep",
-                    "hs_tax_rate_group_id"
+                    "hs_tax_rate_group_id",
+                    "btw"
                 ],
             )
             details = {key: line_item.properties[key] for key in line_item.properties.keys()}
@@ -153,12 +155,14 @@ def get_invoice_details(api_client, invoices, invoice):
             details["quantity"] = int(details["quantity"])
             details["amount"] = float(details["amount"])
             details["price"] = float(details["price"])
+            details["btw"] = float((details.get("btw", 0)) or 0)*100
             line_items_details.append(details)
 
     after = invoices.paging.next.after if invoices.paging else None
 
     return (invoice_number, invoice_status, due_date, invoice_date, amount_billed,
-            company_id, company_relatienummer, company_name, company_address, company_zipcode, company_city, company_email,
+            company_id, company_relatienummer, company_name, company_address, company_zipcode, company_city,
+            company_email,
             line_items_details, after)
 
 
@@ -169,7 +173,7 @@ def create_task(api_client, company_id, title, description):
         "hs_task_body": description,
         "hs_task_status": "WAITING",
         "hs_task_priority": "HIGH",
-        "hs_timestamp": int((datetime.now() + timedelta(days=1)).timestamp()*1000)
+        "hs_timestamp": int((datetime.now() + timedelta(days=1)).timestamp() * 1000)
     }, associations=[
         {"types": [
             {
@@ -177,7 +181,7 @@ def create_task(api_client, company_id, title, description):
                 "associationTypeId": 192
             }
         ],
-        "to": {"id": company_id}}
+            "to": {"id": company_id}}
     ])
     response = api_tasks.create(task)
     return response
@@ -188,7 +192,7 @@ def create_note(api_client, company_id, title, file_id):
     note = notes_spoifc(properties={
         "hs_attachment_ids": f"{file_id}",
         "hs_note_body": title,
-        "hs_timestamp": int(datetime.now().timestamp()*1000)
+        "hs_timestamp": int(datetime.now().timestamp() * 1000)
     }, associations=[
         {"types": [
             {
@@ -196,7 +200,7 @@ def create_note(api_client, company_id, title, file_id):
                 "associationTypeId": 190
             }
         ],
-        "to": {"id": company_id}}
+            "to": {"id": company_id}}
     ])
     response = api_notes.create(note)
     return response
