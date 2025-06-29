@@ -1,16 +1,18 @@
-import logging
 import json
+import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
-import hubspot.files.api.files_api
 import requests
-
-from hubspot.crm.associations import BatchInputPublicObjectId
-from urllib3 import Retry
 from hubspot import HubSpot
-from hubspot.crm.objects.tasks import SimplePublicObjectInputForCreate as tasks_spoifc
+from hubspot.crm.associations import BatchInputPublicObjectId
 from hubspot.crm.objects.notes import SimplePublicObjectInputForCreate as notes_spoifc
+from hubspot.crm.objects.tasks import SimplePublicObjectInputForCreate as tasks_spoifc
+from urllib3 import Retry
+
+from models.company import Company
+from models.invoice import Invoice
+from models.line_item import LineItem
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
@@ -68,27 +70,28 @@ def get_invoices(api_client: HubSpot, after):
         "hs_due_date",
         "hs_number",
     ]
-    invoices = api_client.crm.commerce.invoices.basic_api.get_page(after=after, properties=properties)
-    return invoices
+
+    invoices_hubspot = api_client.crm.commerce.invoices.basic_api.get_page(after=after, properties=properties)
+    invoices = [Invoice(id=invoice.id,
+                        number=invoice.properties["hs_number"],
+                        status=invoice.properties["hs_invoice_status"],
+                        amount_billed=invoice.properties["hs_amount_billed"],
+                        invoice_date = datetime.fromisoformat(
+                            str(invoice.properties["hs_invoice_date"])
+                        ).date(),
+                        due_date = datetime.fromisoformat(
+                            str(invoice.properties["hs_due_date"])
+                        ).date())
+                for invoice in invoices_hubspot.results]
+
+    after = invoices_hubspot.paging.next.after if invoices_hubspot.paging else None
+
+    return invoices, after
 
 
-def get_invoice_details(api_client, invoices, invoice):
+def get_invoice_details(api_client, invoice: Invoice):
     api_companies = api_client.crm.companies.basic_api
     api_line_items = api_client.crm.line_items.basic_api
-
-    invoice_status = invoice.properties["hs_invoice_status"]
-    invoice_number = invoice.properties["hs_number"]
-    logger.info(
-        f"retrieved invoice {invoice_number}[{invoice.id}] with status {invoice_status}"
-    )
-
-    amount_billed = invoice.properties["hs_amount_billed"]
-    invoice_date = datetime.fromisoformat(
-        str(invoice.properties["hs_invoice_date"])
-    )
-    due_date = datetime.fromisoformat(
-        str(invoice.properties["hs_due_date"])
-    )
 
     batch_ids = BatchInputPublicObjectId([{"id": invoice.id}])
     invoice_companies = api_client.crm.associations.batch_api.read(
@@ -96,32 +99,25 @@ def get_invoice_details(api_client, invoices, invoice):
         to_object_type="companies",
         batch_input_public_object_id=batch_ids,
     )
-    company_id = None
     invoice_companies_dict = invoice_companies.to_dict()
     if invoice_companies_dict.get("num_errors", -1) > 0:
         error_messages = [error['message'] for error in invoice_companies_dict['errors']]
         logger.error(f"{' - \n'.join(error_messages)}")
-        company_relatienummer = None
-        company_name = None
-        company_address = None
-        company_zipcode = None
-        company_city = None
-        company_email = None
+        company = None
     else:
         company_id = invoice_companies.results[0].to[0].id
-        company = api_companies.get_by_id(
+        company_hubspot = api_companies.get_by_id(
             company_id=company_id, properties=["relatie_nummer", "name", "address", "zip", "city", "email"]
         )
         logger.info(
-            f"company {company.properties['name']}[{company.id}] was retrieved"
+            f"company {company_hubspot.properties['name']}[{company_hubspot.id}] was retrieved"
         )
-        # gebruik het company_id als het relatie_nummer niet gevonden kan worden of leeg is
-        company_relatienummer = company.properties.get("relatie_nummer", company_id) or company_id
-        company_name = company.properties["name"]
-        company_address = company.properties["address"]
-        company_zipcode = company.properties["zip"]
-        company_city = company.properties["city"]
-        company_email = company.properties["email"]
+        company_args = {key: company_hubspot.properties[key] for key in company_hubspot.properties.keys()}
+        # voeg id toe
+        company_args["id"] = company_id
+        # overschrijf relatienummer: gebruik het company_id als het relatie_nummer niet gevonden kan worden of leeg is
+        company_args["relatienummer"] = company_hubspot.properties.get("relatie_nummer", company_id) or company_id
+        company = Company(**company_args)
 
     invoice_line_items = api_client.crm.associations.batch_api.read(
         from_object_type="invoice",
@@ -129,7 +125,6 @@ def get_invoice_details(api_client, invoices, invoice):
         batch_input_public_object_id=batch_ids,
     )
 
-    line_items_details = []
     if len(invoice_line_items.results) > 0:
         for line_item in invoice_line_items.results[0].to:
             line_item = api_line_items.get_by_id(
@@ -150,20 +145,17 @@ def get_invoice_details(api_client, invoices, invoice):
                     "btw"
                 ],
             )
-            details = {key: line_item.properties[key] for key in line_item.properties.keys()}
+            line_item_args = {key: line_item.properties[key] for key in line_item.properties.keys()}
             # fix types
-            details["quantity"] = int(details["quantity"])
-            details["amount"] = float(details["amount"])
-            details["price"] = float(details["price"])
-            details["btw"] = float((details.get("btw", 0)) or 0)*100
-            line_items_details.append(details)
+            line_item_args["quantity"] = int(line_item_args["quantity"])
+            line_item_args["amount"] = float(line_item_args["amount"])
+            line_item_args["price"] = float(line_item_args["price"])
+            line_item_args["btw"] = float((line_item_args.get("btw", 0)) or 0)*100
+            invoice.line_items.append(LineItem(**line_item_args))
 
-    after = invoices.paging.next.after if invoices.paging else None
 
-    return (invoice_number, invoice_status, due_date, invoice_date, amount_billed,
-            company_id, company_relatienummer, company_name, company_address, company_zipcode, company_city,
-            company_email,
-            line_items_details, after)
+
+    return invoice, company
 
 
 def create_task(api_client, company_id, title, description):

@@ -2,10 +2,13 @@ import logging
 
 from dotenv import load_dotenv
 
-from hubspot_api.api import get_api_client, get_invoices, get_invoice_details, get_taxes, create_task, upload_invoice, \
+from hubspot_api.api import get_api_client, get_invoices, get_invoice_details, create_task, upload_invoice, \
     associate_file_to_company
 from state.db import init_db, is_invoice_id_in_db, save_invoice_id_in_db
-from wefact.invoice import generate_invoice, update_invoice, invoice_update_paid
+from wefact_api.invoice import generate_invoice, invoice_update_paid
+
+INVOICE_STATUS_OPEN = "open"
+INVOICE_STATUS_PAID = "paid"
 
 GROOTBOEKREKENING_DEBITEUREN = "1300"
 
@@ -20,40 +23,35 @@ def main():
         api_client = get_api_client()
         next_invoice = None
         while True:
-            invoices = get_invoices(api_client, next_invoice)
-            for invoice in invoices.results:
-                (invoice_number, invoice_status, due_date, invoice_date, amount_billed,
-                 company_id, company_relatienummer, company_name, company_address, company_zipcode, company_city, company_email,
-                 line_items_details, next_invoice) = get_invoice_details(api_client, invoices, invoice)
+            invoices, next_invoice = get_invoices(api_client, next_invoice)
+            for invoice in invoices:
+                (invoice, company) = get_invoice_details(api_client, invoice)
 
-                if is_invoice_id_in_db(connection, invoice.id, invoice_status):
+                if is_invoice_id_in_db(connection, invoice):
                     logger.info(
-                        f"invoice already processed, skipping invoice {invoice_number}[{invoice.id}]"
+                        f"invoice already processed, skipping invoice {invoice.number}[{invoice.id}]"
                     )
                     continue
-                if invoice_status == "paid":
-                    result = invoice_update_paid(invoice_number)
+                if invoice.status == INVOICE_STATUS_PAID:
+                    result = invoice_update_paid(invoice.number)
                 else:
-                    if invoice_status != "open" or company_relatienummer is None:
+                    if invoice.status != INVOICE_STATUS_OPEN or company.relatienummer is None:
                         logger.warning(
-                            f"skipping invoice {invoice_number}[{invoice.id}] with status {invoice_status}, company relation nr {company_relatienummer}"
+                            f"skipping invoice {invoice.number}[{invoice.id}] with status {invoice.status}, company relation nr {company.relatienummer}"
                         )
                         create_task(api_client, company_id,
-                                    f"company relatienummer {company_relatienummer} voor factuur {invoice_number} is niet gevuld",
-                                    f"het relatienummer voor de company op factuur {invoice_number}[{invoice.id}] moet nog gezet worden.")
+                                    f"company relatienummer {company.relatienummer} voor factuur {invoice.number} is niet gevuld",
+                                    f"het relatienummer voor de company op factuur {invoice.number}[{invoice.id}] moet nog gezet worden.")
                         continue
-                    logger.debug(f"line items details: {line_items_details}")
-                    result = generate_invoice(invoice_number, amount_billed, invoice_date, due_date,
-                                              company_relatienummer, company_name, company_address, company_zipcode, company_city, company_email,
-                                              line_items_details)
+                    result = generate_invoice(invoice, company)
                 if len(result.errors) > 0:
-                    logger.error(f"HubSpot invoice {invoice_number}[{invoice.id}] with status {invoice_status} not saved in state database")
+                    logger.error(f"HubSpot invoice {invoice.number}[{invoice.id}] with status {invoice.status} not saved in state database")
                     logger.error(f"error: {result.errors}")
                     continue
-                filename = f"{invoice_number}.pdf"
+                filename = f"{invoice.number}.pdf"
                 result = upload_invoice(api_client, filename, result.data["pdf"])
-                associate_file_to_company(api_client, company_id, f"{filename} {result["url"]}", result["id"])
-                save_invoice_id_in_db(connection, invoice.id, invoice_status)
+                associate_file_to_company(api_client, company.id, f"{filename} {result["url"]}", result["id"])
+                save_invoice_id_in_db(connection, invoice)
 
             if not next_invoice:
                 break
