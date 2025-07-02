@@ -72,6 +72,10 @@ def get_invoices(api_client: HubSpot, after):
     ]
 
     invoices_hubspot = api_invoices.get_page(after=after, properties=properties)
+    for invoice in invoices_hubspot.results:
+        logger.info(
+            f"invoice {invoice.properties['hs_number']}[{invoice.id}] was retrieved"
+        )
     invoices = [Invoice(id=invoice.id,
                         number=invoice.properties["hs_number"],
                         status=invoice.properties["hs_invoice_status"],
