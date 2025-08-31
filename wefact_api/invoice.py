@@ -4,6 +4,7 @@ from collections import namedtuple
 from enum import IntEnum
 
 from models.company import Company
+from models.contact import Contact
 from models.invoice import Invoice
 from models.line_item import LineItem
 from wefact_api.api import InvoiceClient, DebtorClient, ProductClient
@@ -34,15 +35,16 @@ def invoice_data_id_from_model(invoice: Invoice):
     return invoice_data_id(invoice.number)
 
 
-def invoice_data(code, debtor, invoice_date, term, invoice_lines):
+def invoice_data(code, debtor, invoice_date, term, invoice_lines, custom_fields):
     return {"InvoiceCode": code, "Status": int(InvoiceStatus.Verzonden), "DebtorCode": debtor,
-            "Date": invoice_date.strftime("%Y-%m-%d"), "Term": term, "InvoiceLines": invoice_lines}
+            "Date": invoice_date.strftime("%Y-%m-%d"), "Term": term, "InvoiceLines": invoice_lines, "CustomFields": custom_fields}
 
 
-def invoice_data_from_model(invoice: Invoice, company: Company):
+def invoice_data_from_model(invoice: Invoice, company: Company, contact: Contact):
     invoice_lines = [invoice_line_data_from_model(line_item) for line_item in invoice.line_items]
     term = (invoice.due_date - invoice.invoice_date).days
-    return invoice_data(invoice.number, company.relatienummer, invoice.invoice_date, term, invoice_lines)
+    custom_fields = [{"key": "veld_factuurtoelichting", "value": contact.factuur_toelichting}]
+    return invoice_data(invoice.number, company.relatienummer, invoice.invoice_date, term, invoice_lines, custom_fields)
 
 
 def invoice_line_data(code, number, tax_percentage):
@@ -81,7 +83,7 @@ def update_invoice(invoice):
     return result
 
 
-def generate_invoice(invoice_object: Invoice, company_object: Company):
+def generate_invoice(invoice_object: Invoice, company_object: Company, contact_object: Contact):
     current_date = datetime.datetime.now().strftime("%Y%m%d")
     result = ResultType(data={}, errors=[])
     api_client_invoice = InvoiceClient()
@@ -103,7 +105,7 @@ def generate_invoice(invoice_object: Invoice, company_object: Company):
         elif product["status"] == WEFACT_PRODUCT_STATUS_SUCCESS:
             response = api_client_product.edit(product_data_add_from_model(line_item))
     # now build the invoice line items
-    invoice = api_client_invoice.add(invoice_data_from_model(invoice_object, company_object))
+    invoice = api_client_invoice.add(invoice_data_from_model(invoice_object, company_object, contact_object))
     if invoice["status"] == WEFACT_INVOICE_STATUS_ERROR:
         result.errors.append("error processing invoice:")
         result.errors.extend(invoice['errors'])

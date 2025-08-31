@@ -31,19 +31,19 @@ def main():
 def process_batch_of_invoices(api_client, connection, next_invoice):
     invoices, next_invoice = get_invoices(api_client, next_invoice)
     for invoice in invoices:
-        (invoice, company) = get_invoice_details(api_client, invoice)
         if is_invoice_id_in_db(connection, invoice):
             logger.info(
                 f"invoice already processed, skipping invoice {invoice.number}[{invoice.id}]"
             )
             continue
+        (invoice, company, contact) = get_invoice_details(api_client, invoice)
         # verwerk alleen facturen met PAID of OPEN status
         if invoice.status == INVOICE_STATUS_PAID:
             result = invoice_update_paid(invoice.number)
         else:
             if invoice.status != INVOICE_STATUS_OPEN:
                 continue
-            result = generate_invoice(invoice, company)
+            result = generate_invoice(invoice, company, contact)
         if len(result.errors) > 0:
             logger.error(
                 f"HubSpot invoice {invoice.number}[{invoice.id}] with status {invoice.status} not saved in state database")

@@ -11,6 +11,7 @@ from hubspot.crm.objects.tasks import SimplePublicObjectInputForCreate as tasks_
 from urllib3 import Retry
 
 from models.company import Company
+from models.contact import Contact
 from models.invoice import Invoice
 from models.line_item import LineItem
 
@@ -95,6 +96,7 @@ def get_invoices(api_client: HubSpot, after):
 
 def get_invoice_details(api_client, invoice: Invoice):
     api_companies = api_client.crm.companies.basic_api
+    api_contacts = api_client.crm.contacts.basic_api
     api_line_items = api_client.crm.line_items.basic_api
 
     batch_ids = BatchInputPublicObjectId([{"id": invoice.id}])
@@ -122,6 +124,28 @@ def get_invoice_details(api_client, invoice: Invoice):
         # overschrijf relatienummer: gebruik het company_id als het relatie_nummer niet gevonden kan worden of leeg is
         company_args["relatienummer"] = company_hubspot.properties.get("relatie_nummer", company_id) or company_id
         company = Company(**company_args)
+
+    invoice_contacts = api_client.crm.associations.batch_api.read(
+        from_object_type="invoice",
+        to_object_type="contacts",
+        batch_input_public_object_id=batch_ids,
+    )
+    invoice_contacts_dict = invoice_contacts.to_dict()
+    if invoice_contacts_dict.get("num_errors", -1) > 0:
+        error_messages = [error['message'] for error in invoice_contacts_dict['errors']]
+        logger.error(f"{' - \n'.join(error_messages)}")
+        contact = None
+    else:
+        contact_id = invoice_contacts.results[0].to[0].id
+        contact_hubspot = api_contacts.get_by_id(
+            contact_id=contact_id, properties=["lastname", "factuur_toelichting"]
+        )
+        logger.info(
+            f"contact {contact_hubspot.properties['lastname']}[{contact_hubspot.id}] was retrieved"
+        )
+        contact_args = {key: contact_hubspot.properties[key] for key in contact_hubspot.properties.keys()}
+        # voeg id toe
+        contact = Contact(**contact_args)
 
     invoice_line_items = api_client.crm.associations.batch_api.read(
         from_object_type="invoice",
@@ -156,7 +180,7 @@ def get_invoice_details(api_client, invoice: Invoice):
             line_item_args["price"] = float(line_item_args["price"])
             line_item_args["btw"] = float((line_item_args.get("btw", 0)) or 0) * 100
             invoice.line_items.append(LineItem(**line_item_args))
-    return invoice, company
+    return invoice, company, contact
 
 
 def create_task(api_client, company_id, title, description):
