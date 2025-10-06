@@ -70,6 +70,10 @@ def get_invoices(api_client: HubSpot, after):
         "hs_invoice_date",
         "hs_due_date",
         "hs_number",
+        "betreft_factuurniveau",
+        "referentie_wefact__factuur_",
+        "organisatie__factuur_",
+        "ter_attentie_van__factuur_"
     ]
 
     invoices_hubspot = api_invoices.get_page(after=after, properties=properties)
@@ -86,8 +90,12 @@ def get_invoices(api_client: HubSpot, after):
                         ).date(),
                         due_date=datetime.fromisoformat(
                             str(invoice.properties["hs_due_date"])
-                        ).date())
-                for invoice in invoices_hubspot.results]
+                        ).date(),
+                        betreft=invoice.properties["betreft_factuurniveau"],
+                        referentie = invoice.properties["referentie_wefact__factuur_"],
+                        organisatie = invoice.properties["organisatie__factuur_"],
+                        ter_attentie_van = invoice.properties["ter_attentie_van__factuur_"])
+        for invoice in invoices_hubspot.results]
 
     after = invoices_hubspot.paging.next.after if invoices_hubspot.paging else None
 
