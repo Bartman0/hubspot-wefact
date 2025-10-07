@@ -1,4 +1,5 @@
 import sqlite3
+from models.invoice import Invoice
 
 
 def init_db():
@@ -9,14 +10,14 @@ def init_db():
     return connection
 
 
-def is_invoice_id_in_db(connection, invoice_id, status):
+def is_invoice_id_in_db(connection, invoice: Invoice):
     cursor = connection.cursor()
     cursor.execute(
-        "SELECT invoice_id, status FROM invoice_ids WHERE invoice_id=? AND status=?", (invoice_id, status)
+        "SELECT invoice_id, status FROM invoice_ids WHERE invoice_id=? AND status=?", (invoice.number, invoice.status)
     )
     return cursor.fetchone() is not None
 
 
-def save_invoice_id_in_db(connection, invoice_id, status):
-    connection.execute("INSERT INTO invoice_ids(invoice_id, status) VALUES(?,?)", (invoice_id, status))
+def save_invoice_id_in_db(connection, invoice: Invoice):
+    connection.execute("INSERT INTO invoice_ids(invoice_id, status) VALUES(?,?)", (invoice.number, invoice.status))
     connection.commit()
