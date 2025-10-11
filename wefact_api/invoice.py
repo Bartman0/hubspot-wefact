@@ -46,8 +46,12 @@ def invoice_data_from_model(invoice: Invoice, company: Company, contact: Contact
     custom_fields = [
         {"key": "veld_betreft", "value": invoice.betreft},
         {"key": "veld_referentie", "value": invoice.referentie},
-        {"key": "veld_organisatie", "value": invoice.organisatie},
-        {"key": "veld_ter_attentie_van", "value": invoice.ter_attentie_van},
+        {"key": "veld_factuurorganisatie", "value": invoice.organisatie},
+        {"key": "veld_factuurtav", "value": invoice.ter_attentie_van},
+        {"key": "veld_factuuradres", "value": invoice.adres},
+        {"key": "veld_factuurpostcode", "value": invoice.postcode},
+        {"key": "veld_factuurplaats", "value": invoice.plaats},
+        {"key": "veld_factuurland", "value": invoice.land},
     ]
     return invoice_data(invoice.number, company.relatienummer, invoice.invoice_date, term, invoice_lines, custom_fields)
 
