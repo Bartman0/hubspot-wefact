@@ -36,14 +36,20 @@ def process_batch_of_invoices(api_client, connection, next_invoice):
                 f"invoice already processed, skipping invoice {invoice.number}[{invoice.id}]"
             )
             continue
-        (invoice, company, contact) = get_invoice_details(api_client, invoice)
+        (company, contact, errors) = get_invoice_details(api_client, invoice)
+        if len(errors) > 0:
+            logger.error(
+                f"invoice contains errors {errors}, skipping invoice {invoice.number}[{invoice.id}]"
+            )
+            create_task(api_client, company.id, "errors to be fixed", f"invoice details for {invoice.number} contain errors: {errors}")
+            continue
         # verwerk alleen facturen met PAID of OPEN status
         if invoice.status == INVOICE_STATUS_PAID:
             result = invoice_update_paid(invoice.number)
-        else:
-            if invoice.status != INVOICE_STATUS_OPEN:
-                continue
+        elif invoice.status == INVOICE_STATUS_OPEN:
             result = generate_invoice(invoice, company, contact)
+        else:
+            continue
         if len(result.errors) > 0:
             logger.error(
                 f"HubSpot invoice {invoice.number}[{invoice.id}] with status {invoice.status} not saved in state database")

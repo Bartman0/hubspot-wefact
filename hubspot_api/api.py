@@ -91,10 +91,15 @@ def get_invoices(api_client: HubSpot, after):
                         due_date=datetime.fromisoformat(
                             str(invoice.properties["hs_due_date"])
                         ).date(),
-                        betreft=invoice.properties["betreft_factuurniveau"],
-                        referentie = invoice.properties["referentie_wefact__factuur_"],
-                        organisatie = invoice.properties["organisatie__factuur_"],
-                        ter_attentie_van = invoice.properties["ter_attentie_van__factuur_"])
+                        betreft = invoice.properties.get("betreft_factuurniveau"),
+                        referentie = invoice.properties.get("referentie_wefact__factuur_"),
+                        organisatie = invoice.properties.get("organisatie__factuur_"),
+                        ter_attentie_van = invoice.properties.get("ter_attentie_van__factuur_"),
+                        adres = invoice.properties.get("adres__factuur_"),
+                        postcode = invoice.properties.get("postcode__factuur_"),
+                        plaats = invoice.properties.get("plaats__factuur_"),
+                        land = invoice.properties.get("land__factuur_"),
+                    )
         for invoice in invoices_hubspot.results]
 
     after = invoices_hubspot.paging.next.after if invoices_hubspot.paging else None
@@ -103,6 +108,7 @@ def get_invoices(api_client: HubSpot, after):
 
 
 def get_invoice_details(api_client, invoice: Invoice):
+    errors = []
     api_companies = api_client.crm.companies.basic_api
     api_contacts = api_client.crm.contacts.basic_api
     api_line_items = api_client.crm.line_items.basic_api
@@ -187,8 +193,13 @@ def get_invoice_details(api_client, invoice: Invoice):
             line_item_args["amount"] = float(line_item_args["amount"])
             line_item_args["price"] = float(line_item_args["price"])
             line_item_args["btw"] = float((line_item_args.get("btw", 0)) or 0) * 100
-            invoice.line_items.append(LineItem(**line_item_args))
-    return invoice, company, contact
+            if "hs_sku" in line_item_args and line_item_args["hs_sku"] is not None:
+                invoice.line_items.append(LineItem(**line_item_args))
+            else:
+                message = "SKU is NOT set, skipping invoice line item"
+                logger.error(message)
+                errors.append(message)
+    return company, contact, errors
 
 
 def create_task(api_client, company_id, title, description):
