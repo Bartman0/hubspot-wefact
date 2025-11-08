@@ -160,6 +160,9 @@ def get_invoice_details(api_client, invoice: Invoice):
         contact_args = {key: contact_hubspot.properties[key] for key in contact_hubspot.properties.keys()}
         # voeg id toe
         contact = Contact(**contact_args)
+        # kopieer toelichting op contact naar factuur
+        invoice.toelichting = contact.factuur_toelichting
+
 
     invoice_line_items = api_client.crm.associations.batch_api.read(
         from_object_type="invoice",

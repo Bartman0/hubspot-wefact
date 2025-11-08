@@ -44,14 +44,15 @@ def invoice_data_from_model(invoice: Invoice, company: Company, contact: Contact
     invoice_lines = [invoice_line_data_from_model(line_item) for line_item in invoice.line_items]
     term = (invoice.due_date - invoice.invoice_date).days
     custom_fields = [
-        {"key": "veld_factuurbetreft", "value": invoice.betreft},
-        {"key": "veld_factuurreferentie", "value": invoice.referentie},
-        {"key": "veld_factuurorganisatie", "value": invoice.organisatie},
-        {"key": "veld_factuurtav", "value": invoice.ter_attentie_van},
-        {"key": "veld_factuuradres", "value": invoice.adres},
-        {"key": "veld_factuurpostcode", "value": invoice.postcode},
-        {"key": "veld_factuurplaats", "value": invoice.plaats},
-        {"key": "veld_factuurland", "value": invoice.land},
+        {"key": "factuurbetreft", "value": invoice.betreft},
+        {"key": "factuurreferentie", "value": invoice.referentie},
+        {"key": "factuurorganisatie", "value": invoice.organisatie},
+        {"key": "factuurtav", "value": invoice.ter_attentie_van},
+        {"key": "factuuradres", "value": invoice.adres},
+        {"key": "factuurpostcode", "value": invoice.postcode},
+        {"key": "factuurplaats", "value": invoice.plaats},
+        {"key": "factuurland", "value": invoice.land},
+        {"key": "factuurtoelichting", "value": invoice.toelichting},
     ]
     return invoice_data(invoice.number, company.relatienummer, invoice.invoice_date, term, invoice_lines, custom_fields)
 
