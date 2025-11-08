@@ -73,7 +73,11 @@ def get_invoices(api_client: HubSpot, after):
         "betreft_factuurniveau",
         "referentie_wefact__factuur_",
         "organisatie__factuur_",
-        "ter_attentie_van__factuur_"
+        "ter_attentie_van__factuur_",
+        "adres__factuur_",
+        "postcode__factuur_",
+        "plaats__factuur_",
+        "land__factuur_",
     ]
 
     invoices_hubspot = api_invoices.get_page(after=after, properties=properties)
@@ -99,6 +103,7 @@ def get_invoices(api_client: HubSpot, after):
                         postcode = invoice.properties.get("postcode__factuur_"),
                         plaats = invoice.properties.get("plaats__factuur_"),
                         land = invoice.properties.get("land__factuur_"),
+                        toelichting = ""   # wordt later gevuld vanuit contact
                     )
         for invoice in invoices_hubspot.results]
 
@@ -160,9 +165,6 @@ def get_invoice_details(api_client, invoice: Invoice):
         contact_args = {key: contact_hubspot.properties[key] for key in contact_hubspot.properties.keys()}
         # voeg id toe
         contact = Contact(**contact_args)
-        # kopieer toelichting op contact naar factuur
-        invoice.toelichting = contact.factuur_toelichting
-
 
     invoice_line_items = api_client.crm.associations.batch_api.read(
         from_object_type="invoice",
