@@ -43,17 +43,17 @@ def invoice_data(code, debtor, invoice_date, term, invoice_lines, custom_fields)
 def invoice_data_from_model(invoice: Invoice, company: Company, contact: Contact):
     invoice_lines = [invoice_line_data_from_model(line_item) for line_item in invoice.line_items]
     term = (invoice.due_date - invoice.invoice_date).days
-    custom_fields = [
-        {"key": "factuurbetreft", "value": invoice.betreft},
-        {"key": "factuurreferentie", "value": invoice.referentie},
-        {"key": "factuurorganisatie", "value": invoice.organisatie},
-        {"key": "factuurtav", "value": invoice.ter_attentie_van},
-        {"key": "factuuradres", "value": invoice.adres},
-        {"key": "factuurpostcode", "value": invoice.postcode},
-        {"key": "factuurplaats", "value": invoice.plaats},
-        {"key": "factuurland", "value": invoice.land},
-        {"key": "factuurtoelichting", "value": invoice.toelichting},
-    ]
+    custom_fields = {
+        "factuurbetreft": invoice.betreft,
+        "factuurreferentie": invoice.referentie,
+        "factuurorganisatie": invoice.organisatie,
+        "factuurtav": invoice.ter_attentie_van,
+        "factuuradres": invoice.adres,
+        "factuurpostcode": invoice.postcode,
+        "factuurplaats": invoice.plaats,
+        "factuurland": invoice.land,
+        "factuurtoelichting": invoice.toelichting,
+    }
     return invoice_data(invoice.number, company.relatienummer, invoice.invoice_date, term, invoice_lines, custom_fields)
 
 
