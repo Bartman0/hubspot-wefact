@@ -15,3 +15,5 @@ class LineItem(BaseModel):
     artikelgroep: str | None
     hs_tax_rate_group_id: str | None
     btw: float
+    discount: float
+    hs_discount_percentage: float

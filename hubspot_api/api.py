@@ -78,6 +78,8 @@ def get_invoices(api_client: HubSpot, after):
         "postcode__factuur_",
         "plaats__factuur_",
         "land__factuur_",
+        "hs_total_discount"
+        "hs_discount_percentage"
     ]
 
     invoices_hubspot = api_invoices.get_page(after=after, properties=properties)
@@ -103,7 +105,7 @@ def get_invoices(api_client: HubSpot, after):
                         postcode = invoice.properties.get("postcode__factuur_"),
                         plaats = invoice.properties.get("plaats__factuur_"),
                         land = invoice.properties.get("land__factuur_"),
-                        toelichting = ""   # wordt later gevuld vanuit contact
+                        korting = invoice.properties.get("hs_total_discount", 0.0),
                     )
         for invoice in invoices_hubspot.results]
 
@@ -189,15 +191,27 @@ def get_invoice_details(api_client, invoice: Invoice):
                     "artikelsoort",
                     "artikelgroep",
                     "hs_tax_rate_group_id",
-                    "btw"
+                    "btw",
+                    "discount",
+                    "hs_discount_percentage"
                 ],
             )
             line_item_args = {key: line_item.properties[key] for key in line_item.properties.keys()}
             # fix types
-            line_item_args["quantity"] = int(line_item_args["quantity"])
-            line_item_args["amount"] = float(line_item_args["amount"])
-            line_item_args["price"] = float(line_item_args["price"])
+            quantity = int(line_item_args["quantity"])
+            line_item_args["quantity"] = quantity
+            amount = float(line_item_args["amount"])
+            line_item_args["amount"] = amount
+            price = float(line_item_args["price"])
+            line_item_args["price"] = price
             line_item_args["btw"] = float((line_item_args.get("btw", 0)) or 0) * 100
+            discount_amount = float(line_item_args.get("discount", 0) or 0)
+            line_item_args["discount"] = discount_amount
+            line_item_args["hs_discount_percentage"] = float(line_item_args.get("hs_discount_percentage", 0) or 0)
+            # if discount amount is not 0, calculate the line item percentage ourselves
+            if discount_amount != 0:
+                discount_percentage = round(discount_amount/(quantity*price)*100, 2)
+                line_item_args["hs_discount_percentage"] = discount_percentage
             if "hs_sku" in line_item_args and line_item_args["hs_sku"] is not None:
                 invoice.line_items.append(LineItem(**line_item_args))
             else:

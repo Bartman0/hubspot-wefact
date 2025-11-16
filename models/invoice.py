@@ -19,5 +19,4 @@ class Invoice(BaseModel):
     postcode: str | None
     plaats: str | None
     land: str | None
-    toelichting: str | None
-
+    korting: float

@@ -43,8 +43,6 @@ def process_batch_of_invoices(api_client, connection, next_invoice):
             )
             create_task(api_client, company.id, "errors to be fixed", f"invoice details for {invoice.number} contain errors: {errors}")
             continue
-        # kopieer toelichting op contact naar invoice
-        invoice.toelichting = contact.factuur_toelichting
         # verwerk alleen facturen met PAID of OPEN status
         if invoice.status == INVOICE_STATUS_PAID:
             result = invoice_update_paid(invoice.number)
