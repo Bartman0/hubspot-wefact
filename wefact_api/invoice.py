@@ -73,7 +73,8 @@ def invoice_update_paid(code):
     result.data["InvoiceCode"] = code
     result.data["Status"] = int(InvoiceStatus.Betaald)
     api_client_invoice = InvoiceClient()
-    invoice_number = f"test_{current_date}_{code}"
+    # invoice_number = f"test_{current_date}_{code}"
+    invoice_number = f"{code}"
     invoice = api_client_invoice.show(invoice_data_id(invoice_number))
     download_result = api_client_invoice.download(invoice_data_id(invoice_number))
     if invoice["status"] == "success":
@@ -99,7 +100,8 @@ def generate_invoice(invoice_object: Invoice, company_object: Company, contact_o
     current_date = datetime.datetime.now().strftime("%Y%m%d")
     result = ResultType(data={}, errors=[])
     api_client_invoice = InvoiceClient()
-    invoice_number = f"test_{current_date}_{invoice_object.number}"
+    # invoice_number = f"test_{current_date}_{invoice_object.number}"
+    invoice_number = f"{invoice_object.number}"
     invoice_object.number = invoice_number
     invoice = api_client_invoice.show(invoice_data_id(invoice_number))
     if invoice["status"] != WEFACT_INVOICE_STATUS_ERROR:
