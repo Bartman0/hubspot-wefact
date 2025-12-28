@@ -1,9 +1,16 @@
+import os
 import sqlite3
+from pathlib import Path
+
 from models.invoice import Invoice
 
 
 def init_db():
-    connection = sqlite3.connect("/tmp/hubspot-wefact.db")
+    data_path = os.getenv("APPDATA", "data")
+
+    db_path = Path(data_path) / "hubspot-wefact.db"
+    print(db_path)
+    connection = sqlite3.connect(db_path)
     connection.execute(
         "CREATE TABLE IF NOT EXISTS invoice_ids(invoice_id text, status text, PRIMARY KEY(invoice_id, status))"
     )
@@ -13,11 +20,15 @@ def init_db():
 def is_invoice_id_in_db(connection, invoice: Invoice):
     cursor = connection.cursor()
     cursor.execute(
-        "SELECT invoice_id, status FROM invoice_ids WHERE invoice_id=? AND status=?", (invoice.number, invoice.status)
+        "SELECT invoice_id, status FROM invoice_ids WHERE invoice_id=? AND status=?",
+        (invoice.number, invoice.status),
     )
     return cursor.fetchone() is not None
 
 
 def save_invoice_id_in_db(connection, invoice: Invoice):
-    connection.execute("INSERT INTO invoice_ids(invoice_id, status) VALUES(?,?)", (invoice.number, invoice.status))
+    connection.execute(
+        "INSERT INTO invoice_ids(invoice_id, status) VALUES(?,?)",
+        (invoice.number, invoice.status),
+    )
     connection.commit()
