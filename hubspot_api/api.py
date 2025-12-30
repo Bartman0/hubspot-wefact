@@ -2,6 +2,7 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import requests
 from hubspot import HubSpot
@@ -17,6 +18,10 @@ from models.line_item import LineItem
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
+
+
+INVOICES_BASE_PATH = Path(os.getenv("APPDATA", os.getenv("HOME", "/tmp"))) / "WeFactInvoices"
+os.makedirs(INVOICES_BASE_PATH, exist_ok = True)
 
 
 def get_access_token_hubspot():
@@ -43,11 +48,12 @@ def get_taxes(api_client):
 
 
 def upload_invoice(api_client, filename, data):
-    with open(filename, "wb") as file:
+    file_path = INVOICES_BASE_PATH / filename
+    with open(file_path, "wb") as file:
         file.write(data)
     options = json.dumps({"access": "PUBLIC_INDEXABLE", "overwrite": True})
     response = api_client.files.files_api.upload(
-        file=filename,
+        file=file_path,
         file_name=filename,
         folder_path="/invoices",
         options=options

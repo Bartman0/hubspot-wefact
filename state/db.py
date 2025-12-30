@@ -9,7 +9,6 @@ def init_db():
     data_path = os.getenv("APPDATA", "data")
 
     db_path = Path(data_path) / "hubspot-wefact.db"
-    print(db_path)
     connection = sqlite3.connect(db_path)
     connection.execute(
         "CREATE TABLE IF NOT EXISTS invoice_ids(invoice_id text, status text, PRIMARY KEY(invoice_id, status))"
