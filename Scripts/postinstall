@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# installer script variables:
+# $0 = path to the script
+# $1 = path to the package
+# $2 = target location, i.e., /Applications
+# $3 = target volume, i.e., /Volumes/Macintosh HD
+# $4 = "/" if this is the startup disk
+
+chmod ugo+r "$HOME/.local/hubspot-wefact/bin/hubspot-wefact.shortcut"
+
+mv "$HOME/.local/hubspot-wefact/bin/hubspot-wefact.db" "$HOME"
+mv "$HOME/.local/hubspot-wefact/bin/hubspot-wefact.shortcut" "$HOME/Applications"
+
+exit 0

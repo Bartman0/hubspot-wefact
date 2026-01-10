@@ -1,0 +1,4 @@
+#!/bin/bash
+
+mkdir -p "${HOME}/.local/hubspot-wefact/bin"
+
