@@ -17,3 +17,9 @@ wheels/
 
 *.pdf
 
+*.pkg
+
+data/
+
+Scripts/
+
