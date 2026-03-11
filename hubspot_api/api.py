@@ -17,7 +17,7 @@ from models.invoice import Invoice
 from models.line_item import LineItem
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 
 INVOICES_BASE_PATH = Path(os.getenv("APPDATA", os.getenv("HOME", "/tmp"))) / "WeFactInvoices"

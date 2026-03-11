@@ -9,7 +9,7 @@ WEFACT_API_URL: str = "https://api.mijnwefact.nl/v2/"
 WEFACT_API_KEY: str = os.environ["WEFACT_API_KEY"]
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 
 class WeFactBase(ABC):

@@ -14,8 +14,11 @@ GROOTBOEKREKENING_DEBITEUREN = "1300"
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger()
+logging.basicConfig(level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S", force=True
+)
+logger = logging.getLogger(__name__)
 
 
 def main():
