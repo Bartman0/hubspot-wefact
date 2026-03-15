@@ -91,7 +91,7 @@
               "Content-Type": "application/json",
             },
           });
-
+          console.log(response);
           if (response.ok) {
             const data = await response.json();
             showStatus("Success! Task status.", "success");
