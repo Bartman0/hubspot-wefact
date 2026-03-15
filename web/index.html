@@ -93,13 +93,13 @@
           });
           console.log(response);
           if (response.ok) {
-            const data = await response.json();
+            const responseText = await response.json();
             showStatus("Success! Task status.", "success");
-            data.forEach((task) => {
-              const li = document.createElement("li");
-              li.textContent = task.name || JSON.stringify(task);
-              taskStatus.appendChild(li);
-            });
+            const data = JSON.parse(responseText);
+            console.log(data.task_id);
+            console.log(data.status);
+            showStatus(data.message, data.status);
+            }
           } else {
             showStatus(
               `Error: ${response.status} - ${response.statusText}`,
