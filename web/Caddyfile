@@ -1,0 +1,19 @@
+:8443 {
+    # Set the root directory for your static files
+    root * /usr/share/caddy
+
+    # 1. Handle the /tasks URI: Proxy it to the internal service
+    handle /tasks* {
+        reverse_proxy localhost:8000
+    }
+
+    # 2. Handle everything else: Serve static files
+    handle {
+        file_server
+    }
+
+    # Optional: Enable detailed logging
+    log {
+        output file /var/log/caddy/access.log
+    }
+}
