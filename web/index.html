@@ -46,6 +46,12 @@
         border-radius: 4px;
         display: none;
       }
+      #fetchResponse {
+        margin-top: 20px;
+        padding: 10px;
+        border-radius: 4px;
+        display: none;
+      }
       .error {
         background-color: #f8d7da;
         color: #721c24;
@@ -64,18 +70,60 @@
       <button onclick="fetchTasks()">Start Hubspot-Wefact</button>
 
       <div id="status"></div>
-      <ul id="taskStatus"></ul>
+      <div id="fetchResponse">
+        <button id="fetchResponseButton">Latest response</button>
+        <div id="response"></div>
+      </div>
     </div>
 
     <script>
+      async function fetchResponse(id) {
+        console.log("Button clicked for task ID:", id);
+        const apiKey = document.getElementById("apiKey").value;
+        const responseDiv = document.getElementById("response");
+
+        try {
+          // Note: If this page is HTTPS, localhost:8000 must also be HTTPS
+          const response = await fetch(
+            `http://85.215.134.144:8443/tasks/${id}`,
+            {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+              },
+            },
+          );
+          if (response.ok) {
+            const data = await response.json();
+            responseDiv.textContent = data.output;
+            responseDiv.style.display = "block";
+          } else {
+            showStatus(
+              `Error: ${response.status} - ${response.statusText}`,
+              "error",
+            );
+          }
+        } catch (err) {
+          showStatus(
+            "Connection failed. Ensure your local service is running and CORS is enabled.",
+            "error",
+          );
+          console.error(err);
+        }
+      }
+
       async function fetchTasks() {
         const apiKey = document.getElementById("apiKey").value;
         const statusDiv = document.getElementById("status");
-        const taskStatus = document.getElementById("taskStatus");
+        const fetchResponseDiv = document.getElementById("fetchResponse");
+        const responseButton = document.querySelector("#fetchResponseButton");
+        const responseDiv = document.getElementById("response");
 
         // Reset UI
         statusDiv.style.display = "none";
-        taskStatus.innerHTML = "";
+        fetchResponseDiv.style.display = "none";
+        responseDiv.textContent = "";
 
         if (!apiKey) {
           showStatus("Please enter an API key.", "error");
@@ -91,10 +139,13 @@
               "Content-Type": "application/json",
             },
           });
-          console.log(response);
           if (response.ok) {
             const data = await response.json();
             showStatus(`${data.message} (${data.task_id})`, data.status);
+            responseButton.onclick = () => {
+              fetchResponse(data.task_id);
+            };
+            fetchResponseDiv.style.display = "block";
           } else {
             showStatus(
               `Error: ${response.status} - ${response.statusText}`,
