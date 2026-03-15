@@ -93,8 +93,8 @@
           });
           console.log(response);
           if (response.ok) {
-            const responseText = await response.json();
-            console.log(responseText);
+            const data = await response.json();
+            console.log(data);
             console.log(data.task_id);
             console.log(data.status);
             showStatus(data.message, data.status);
