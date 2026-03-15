@@ -94,7 +94,7 @@
           console.log(response);
           if (response.ok) {
             const responseText = await response.json();
-            const data = JSON.parse(responseText);
+            console.log(responseText);
             console.log(data.task_id);
             console.log(data.status);
             showStatus(data.message, data.status);
