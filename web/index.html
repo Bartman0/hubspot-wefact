@@ -94,12 +94,10 @@
           console.log(response);
           if (response.ok) {
             const responseText = await response.json();
-            showStatus("Success! Task status.", "success");
             const data = JSON.parse(responseText);
             console.log(data.task_id);
             console.log(data.status);
             showStatus(data.message, data.status);
-            }
           } else {
             showStatus(
               `Error: ${response.status} - ${response.statusText}`,
