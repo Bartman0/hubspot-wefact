@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hubspot-Wefact</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        display: flex;
+        justify-content: center;
+        padding: 50px;
+        background-color: #f4f7f6;
+      }
+      .container {
+        background: white;
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        width: 100%;
+        max-width: 400px;
+      }
+      input {
+        width: 100%;
+        padding: 10px;
+        margin: 10px 0;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+      button {
+        width: 100%;
+        padding: 10px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      #status {
+        margin-top: 20px;
+        padding: 10px;
+        border-radius: 4px;
+        display: none;
+      }
+      .error {
+        background-color: #f8d7da;
+        color: #721c24;
+      }
+      .success {
+        background-color: #d4edda;
+        color: #155724;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Hubspot-Wefact service</h2>
+      <label for="apiKey">Enter API Key</label>
+      <input type="password" id="apiKey" placeholder="..." />
+      <button onclick="fetchTasks()">Start Hubspot-Wefact</button>
+
+      <div id="status"></div>
+      <ul id="taskStatus"></ul>
+    </div>
+
+    <script>
+      async function fetchTasks() {
+        const apiKey = document.getElementById("apiKey").value;
+        const statusDiv = document.getElementById("status");
+        const taskStatus = document.getElementById("taskStatus");
+
+        // Reset UI
+        statusDiv.style.display = "none";
+        taskStatus.innerHTML = "";
+
+        if (!apiKey) {
+          showStatus("Please enter an API key.", "error");
+          return;
+        }
+
+        try {
+          // Note: If this page is HTTPS, localhost:8000 must also be HTTPS
+          const response = await fetch("http://85.215.134.144:8443/tasks", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            showStatus("Success! Task status.", "success");
+            data.forEach((task) => {
+              const li = document.createElement("li");
+              li.textContent = task.name || JSON.stringify(task);
+              taskStatus.appendChild(li);
+            });
+          } else {
+            showStatus(
+              `Error: ${response.status} - ${response.statusText}`,
+              "error",
+            );
+          }
+        } catch (err) {
+          showStatus(
+            "Connection failed. Ensure your local service is running and CORS is enabled.",
+            "error",
+          );
+          console.error(err);
+        }
+      }
+
+      function showStatus(msg, type) {
+        const statusDiv = document.getElementById("status");
+        statusDiv.textContent = msg;
+        statusDiv.className = type;
+        statusDiv.style.display = "block";
+      }
+    </script>
+  </body>
+</html>
