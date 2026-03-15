@@ -94,7 +94,7 @@
           console.log(response);
           if (response.ok) {
             const data = await response.json();
-            showStatus(data.message || "(" || data.task_id || ")", data.status);
+            showStatus(`${data.message} (${data.task_id})`, data.status);
           } else {
             showStatus(
               `Error: ${response.status} - ${response.statusText}`,
