@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  hubspot-wefact:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # CRITICAL: This allows the container to control Docker on the host
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HUBSPOT_ACCESS_TOKEN=${HUBSPOT_ACCESS_TOKEN}
+      - WEFACT_API_KEY=${WEFACT_API_KEY}
+    restart: always
+
+  # Optional: A Redis container if you decide to move away from 
+  # in-memory task tracking later
+  # redis:
+  #   image: redis:alpine
