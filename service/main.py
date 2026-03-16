@@ -6,10 +6,10 @@ import docker
 import uuid
 from typing import Dict
 
-VALID_API_KEY = "sk-123"
+VALID_API_KEY = os.environ["API_KEY"]
 
 IMAGE = "creathlon/hubspot-wefact"
-HOST_DATA_PATH = "/home/creathlon/hubspot-wefact/data"
+HOST_DATA_PATH = os.environ["HOST_DATA_PATH"]
 
 app = FastAPI()
 app.add_middleware(
