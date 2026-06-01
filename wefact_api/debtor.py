@@ -14,6 +14,14 @@ def debtor_data_add(code, name, address, zipcode, city, email):
             "EmailAddress": email}
 
 
+def debtor_data_edit(id, code, name, address, zipcode, city, email):
+    return {"Identifier": id, "DebtorCode": code, "CompanyName": name, "Address": address, "ZipCode": zipcode,
+            "City": city, "EmailAddress": email}
+
 def debtor_data_add_from_model(company: Company):
     return debtor_data_add(company.relatienummer, company.name, company.address, company.zip, company.city,
-                           company.email)
+                           company.mailadres_factuur)
+
+def debtor_data_edit_from_model(id: int, company: Company):
+    return debtor_data_edit(id, company.relatienummer, company.name, company.address, company.zip, company.city,
+                           company.mailadres_factuur)

@@ -62,6 +62,9 @@ class DebtorClient(WeFactBase):
     def add(self, debtor):
         return self.request("add", data=debtor)
 
+    def edit(self, debtor):
+        return self.request("edit", data=debtor)
+
 
 class ProductClient(WeFactBase):
     def __init__(self):

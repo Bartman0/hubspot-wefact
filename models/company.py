@@ -9,3 +9,4 @@ class Company(BaseModel):
     zip: str | None
     city: str | None
     email: str | None
+    mailadres_factuur: str | None

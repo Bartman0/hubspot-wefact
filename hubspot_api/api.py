@@ -140,7 +140,7 @@ def get_invoice_details(api_client, invoice: Invoice):
     else:
         company_id = invoice_companies.results[0].to[0].id
         company_hubspot = api_companies.get_by_id(
-            company_id=company_id, properties=["relatie_nummer", "name", "address", "zip", "city", "email"]
+            company_id=company_id, properties=["relatie_nummer", "name", "address", "zip", "city", "email", "mailadres_factuur"]
         )
         logger.info(
             f"company {company_hubspot.properties['name']}[{company_hubspot.id}] was retrieved"

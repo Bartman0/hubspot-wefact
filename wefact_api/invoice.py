@@ -8,7 +8,7 @@ from models.contact import Contact
 from models.invoice import Invoice
 from models.line_item import LineItem
 from wefact_api.api import InvoiceClient, DebtorClient, ProductClient
-from wefact_api.debtor import debtor_data_id_from_model, debtor_data_add_from_model
+from wefact_api.debtor import debtor_data_id_from_model, debtor_data_add_from_model, debtor_data_edit_from_model
 from wefact_api.product import product_data_add_from_model, product_data_id_from_model
 
 WEFACT_INVOICE_STATUS_SUCCESS = "success"
@@ -111,6 +111,8 @@ def generate_invoice(invoice_object: Invoice, company_object: Company, contact_o
     company = api_client_debtor.show(debtor_data_id_from_model(company_object))
     if company["status"] == WEFACT_INVOICE_STATUS_ERROR:
         api_client_debtor.add(debtor_data_add_from_model(company_object))
+    else:
+        api_client_debtor.edit(debtor_data_edit_from_model(company["debtor"]["Identifier"], company_object))
     api_client_product = ProductClient()
     for line_item in invoice_object.line_items:
         product = api_client_product.show(product_data_id_from_model(line_item))
