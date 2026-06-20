@@ -20,3 +20,4 @@ class Invoice(BaseModel):
     plaats: str | None
     land: str | None
     korting: float
+    relatienummer: str | None

@@ -50,7 +50,7 @@ def process_batch_of_invoices(api_client, connection, next_invoice):
         if invoice.status == INVOICE_STATUS_PAID:
             result = invoice_update_paid(invoice.number)
         elif invoice.status == INVOICE_STATUS_OPEN:
-            result = generate_invoice(invoice, company, contact)
+            result = generate_invoice(invoice, company)
         else:
             continue
         if len(result.errors) > 0:

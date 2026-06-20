@@ -112,6 +112,7 @@ def get_invoices(api_client: HubSpot, after):
                         plaats = invoice.properties.get("plaats__factuur_"),
                         land = invoice.properties.get("land__factuur_"),
                         korting = invoice.properties.get("hs_total_discount", 0.0),
+                        relatienummer = invoice.properties.get("relatienummer_factuur")
                     )
         for invoice in invoices_hubspot.results]
 
@@ -140,7 +141,7 @@ def get_invoice_details(api_client, invoice: Invoice):
     else:
         company_id = invoice_companies.results[0].to[0].id
         company_hubspot = api_companies.get_by_id(
-            company_id=company_id, properties=["relatie_nummer", "name", "address", "zip", "city", "email", "mailadres_factuur"]
+            company_id=company_id, properties=["relatie_nummer", "name", "address", "zip", "city", "email", "mailadres_factuur", "land"]
         )
         logger.info(
             f"company {company_hubspot.properties['name']}[{company_hubspot.id}] was retrieved"

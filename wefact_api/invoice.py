@@ -36,13 +36,13 @@ def invoice_data_id_from_model(invoice: Invoice):
     return invoice_data_id(invoice.number)
 
 
-def invoice_data(code, debtor, invoice_date, term, discount, invoice_lines, custom_fields):
+def invoice_data(code, debtor, invoice_date, term, discount, invoice_lines, custom_fields, country):
     return {"InvoiceCode": code, "Status": int(InvoiceStatus.Verzonden), "DebtorCode": debtor,
             "Date": invoice_date.strftime("%Y-%m-%d"), "Term": term, "Discount": discount,
-            "InvoiceLines": invoice_lines, "CustomFields": custom_fields}
+            "InvoiceLines": invoice_lines, "CustomFields": custom_fields, "Country": country}
 
 
-def invoice_data_from_model(invoice: Invoice, company: Company, contact: Contact):
+def invoice_data_from_model(invoice: Invoice, company: Company):
     invoice_lines = [invoice_line_data_from_model(line_item) for line_item in invoice.line_items]
     term = (invoice.due_date - invoice.invoice_date).days
     custom_fields = {
@@ -54,8 +54,9 @@ def invoice_data_from_model(invoice: Invoice, company: Company, contact: Contact
         "factuurpostcode": invoice.postcode,
         "factuurplaats": invoice.plaats,
         "factuurland": invoice.land,
+        "factuurrelatienummer": invoice.relatienummer
     }
-    return invoice_data(invoice.number, company.relatienummer, invoice.invoice_date, term, invoice.korting, invoice_lines, custom_fields)
+    return invoice_data(invoice.number, company.relatienummer, invoice.invoice_date, term, invoice.korting, invoice_lines, custom_fields, invoice.land)
 
 
 def invoice_line_data(code, number, tax_percentage, discount_percentage):
@@ -68,12 +69,10 @@ def invoice_line_data_from_model(line_item: LineItem):
 
 
 def invoice_update_paid(code):
-    current_date = datetime.datetime.now().strftime("%Y%m%d")
     result = ResultType(data={}, errors=[])
     result.data["InvoiceCode"] = code
     result.data["Status"] = int(InvoiceStatus.Betaald)
     api_client_invoice = InvoiceClient()
-    # invoice_number = f"test_{current_date}_{code}"
     invoice_number = f"{code}"
     invoice = api_client_invoice.show(invoice_data_id(invoice_number))
     download_result = api_client_invoice.download(invoice_data_id(invoice_number))
@@ -88,7 +87,7 @@ def invoice_update_paid(code):
 def update_invoice(invoice):
     result = ResultType(data={}, errors=[])
     api_client_invoice = InvoiceClient()
-    invoice_number = f"testA_{invoice.number}"
+    invoice_number = f"{invoice.number}"
     invoice = api_client_invoice.edit(invoice_data_id(invoice_number))
     if invoice["status"] != "error":
         result.errors.append("invoice already exists")
@@ -96,32 +95,35 @@ def update_invoice(invoice):
     return result
 
 
-def generate_invoice(invoice_object: Invoice, company_object: Company, contact_object: Contact):
-    current_date = datetime.datetime.now().strftime("%Y%m%d")
+def generate_invoice(invoice_object: Invoice, company_object: Company):
     result = ResultType(data={}, errors=[])
     api_client_invoice = InvoiceClient()
-    # invoice_number = f"test_{current_date}_{invoice_object.number}"
     invoice_number = f"{invoice_object.number}"
     invoice_object.number = invoice_number
     invoice = api_client_invoice.show(invoice_data_id(invoice_number))
     if invoice["status"] != WEFACT_INVOICE_STATUS_ERROR:
+        # invoice was found (= no error)
         result.errors.append("invoice already exists")
         return result
+    # make sure the debtor exists which is used on the invoice
     api_client_debtor = DebtorClient()
     company = api_client_debtor.show(debtor_data_id_from_model(company_object))
     if company["status"] == WEFACT_INVOICE_STATUS_ERROR:
+        # debtor not found
         api_client_debtor.add(debtor_data_add_from_model(company_object))
     else:
         api_client_debtor.edit(debtor_data_edit_from_model(company["debtor"]["Identifier"], company_object))
+    # make sure the products exist that are used on the invoice
     api_client_product = ProductClient()
     for line_item in invoice_object.line_items:
         product = api_client_product.show(product_data_id_from_model(line_item))
         if product["status"] == WEFACT_PRODUCT_STATUS_ERROR:
+            # product not found
             response = api_client_product.add(product_data_add_from_model(line_item))
         elif product["status"] == WEFACT_PRODUCT_STATUS_SUCCESS:
             response = api_client_product.edit(product_data_add_from_model(line_item))
     # now build the invoice line items
-    invoice = api_client_invoice.add(invoice_data_from_model(invoice_object, company_object, contact_object))
+    invoice = api_client_invoice.add(invoice_data_from_model(invoice_object, company_object))
     if invoice["status"] == WEFACT_INVOICE_STATUS_ERROR:
         result.errors.append("error processing invoice:")
         result.errors.extend(invoice['errors'])

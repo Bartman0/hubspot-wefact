@@ -10,3 +10,4 @@ class Company(BaseModel):
     city: str | None
     email: str | None
     mailadres_factuur: str | None
+    land: str | None
