@@ -40,7 +40,7 @@ def get_api_client():
 
 def get_taxes(api_client):
     endpoint = "https://api.hubapi.com/tax-rates/v1/tax-rates"
-    headers = {"Authorization": "Bearer " + str(os.environ["HUBSPOT_ACCESS_TOKEN"])}
+    headers = {"Authorization": "Bearer " + get_access_token_hubspot()}
     response = requests.get(endpoint, headers=headers)
     return {tax["id"]: {"name": tax["name"], "percentageRate": tax["percentageRate"], "id": tax["id"],
                         "label": tax["label"]}
@@ -84,8 +84,8 @@ def get_invoices(api_client: HubSpot, after):
         "postcode__factuur_",
         "plaats__factuur_",
         "land__factuur_",
-        "hs_total_discount"
-        "hs_discount_percentage"
+        "hs_total_discount",
+        "hs_discount_percentage",
     ]
 
     invoices_hubspot = api_invoices.get_page(after=after, properties=properties)
@@ -121,110 +121,122 @@ def get_invoices(api_client: HubSpot, after):
     return invoices, after
 
 
-def get_invoice_details(api_client, invoice: Invoice):
-    errors = []
-    api_companies = api_client.crm.companies.basic_api
-    api_contacts = api_client.crm.contacts.basic_api
-    api_line_items = api_client.crm.line_items.basic_api
+LINE_ITEM_PROPERTIES = [
+    "hs_sku",
+    "amount",
+    "quantity",
+    "price",
+    "voorraadnummer",
+    "name",
+    "kostenplaats",
+    "grootboek",
+    "gewicht",
+    "artikelsoort",
+    "artikelgroep",
+    "hs_tax_rate_group_id",
+    "btw",
+    "discount",
+    "hs_discount_percentage",
+]
 
-    batch_ids = BatchInputPublicObjectId([{"id": invoice.id}])
-    invoice_companies = api_client.crm.associations.batch_api.read(
+
+def _read_first_association_id(api_client, invoice_id, to_object_type):
+    """Return the id of the first object associated with the invoice, or None on error."""
+    batch_ids = BatchInputPublicObjectId([{"id": invoice_id}])
+    associations = api_client.crm.associations.batch_api.read(
         from_object_type="invoice",
-        to_object_type="companies",
+        to_object_type=to_object_type,
         batch_input_public_object_id=batch_ids,
     )
-    invoice_companies_dict = invoice_companies.to_dict()
-    if invoice_companies_dict.get("num_errors", -1) > 0:
-        error_messages = [error['message'] for error in invoice_companies_dict['errors']]
+    associations_dict = associations.to_dict()
+    if associations_dict.get("num_errors", -1) > 0:
+        error_messages = [error['message'] for error in associations_dict['errors']]
         logger.error(f"{' - \n'.join(error_messages)}")
-        company = None
-    else:
-        company_id = invoice_companies.results[0].to[0].id
-        company_hubspot = api_companies.get_by_id(
-            company_id=company_id, properties=["relatie_nummer", "name", "address", "zip", "city", "email", "mailadres_factuur", "land"]
-        )
-        logger.info(
-            f"company {company_hubspot.properties['name']}[{company_hubspot.id}] was retrieved"
-        )
-        company_args = {key: company_hubspot.properties[key] for key in company_hubspot.properties.keys()}
-        # voeg id toe
-        company_args["id"] = company_id
-        # overschrijf relatienummer: gebruik het company_id als het relatie_nummer niet gevonden kan worden of leeg is
-        company_args["relatienummer"] = company_hubspot.properties.get("relatie_nummer", company_id) or company_id
-        company = Company(**company_args)
+        return None
+    return associations.results[0].to[0].id
 
-    invoice_contacts = api_client.crm.associations.batch_api.read(
-        from_object_type="invoice",
-        to_object_type="contacts",
-        batch_input_public_object_id=batch_ids,
+
+def _fetch_company(api_companies, company_id):
+    company_hubspot = api_companies.get_by_id(
+        company_id=company_id, properties=["relatie_nummer", "name", "address", "zip", "city", "email", "mailadres_factuur", "land"]
     )
-    invoice_contacts_dict = invoice_contacts.to_dict()
-    if invoice_contacts_dict.get("num_errors", -1) > 0:
-        error_messages = [error['message'] for error in invoice_contacts_dict['errors']]
-        logger.error(f"{' - \n'.join(error_messages)}")
-        contact = None
-    else:
-        contact_id = invoice_contacts.results[0].to[0].id
-        contact_hubspot = api_contacts.get_by_id(
-            contact_id=contact_id, properties=["lastname", "factuur_toelichting"]
-        )
-        logger.info(
-            f"contact {contact_hubspot.properties['lastname']}[{contact_hubspot.id}] was retrieved"
-        )
-        contact_args = {key: contact_hubspot.properties[key] for key in contact_hubspot.properties.keys()}
-        # voeg id toe
-        contact = Contact(**contact_args)
+    logger.info(
+        f"company {company_hubspot.properties['name']}[{company_hubspot.id}] was retrieved"
+    )
+    company_args = {key: company_hubspot.properties[key] for key in company_hubspot.properties.keys()}
+    # voeg id toe
+    company_args["id"] = company_id
+    # overschrijf relatienummer: gebruik het company_id als het relatie_nummer niet gevonden kan worden of leeg is
+    company_args["relatienummer"] = company_hubspot.properties.get("relatie_nummer", company_id) or company_id
+    return Company(**company_args)
 
+
+def _fetch_contact(api_contacts, contact_id):
+    contact_hubspot = api_contacts.get_by_id(
+        contact_id=contact_id, properties=["lastname", "factuur_toelichting"]
+    )
+    logger.info(
+        f"contact {contact_hubspot.properties['lastname']}[{contact_hubspot.id}] was retrieved"
+    )
+    contact_args = {key: contact_hubspot.properties[key] for key in contact_hubspot.properties.keys()}
+    return Contact(**contact_args)
+
+
+def _build_line_item(line_item_args):
+    # fix types
+    quantity = int(line_item_args["quantity"])
+    line_item_args["quantity"] = quantity
+    line_item_args["amount"] = float(line_item_args["amount"])
+    price = float(line_item_args["price"])
+    line_item_args["price"] = price
+    line_item_args["btw"] = float((line_item_args.get("btw", 0)) or 0) * 100
+    discount_amount = float(line_item_args.get("discount", 0) or 0)
+    line_item_args["discount"] = discount_amount
+    line_item_args["hs_discount_percentage"] = float(line_item_args.get("hs_discount_percentage", 0) or 0)
+    # if discount amount is not 0, calculate the line item percentage ourselves
+    if discount_amount != 0:
+        line_item_args["hs_discount_percentage"] = round(discount_amount / (quantity * price) * 100, 2)
+    return LineItem(**line_item_args)
+
+
+def _fetch_line_items(api_client, api_line_items, invoice_id):
+    line_items, errors = [], []
+    batch_ids = BatchInputPublicObjectId([{"id": invoice_id}])
     invoice_line_items = api_client.crm.associations.batch_api.read(
         from_object_type="invoice",
         to_object_type="line_items",
         batch_input_public_object_id=batch_ids,
     )
+    if len(invoice_line_items.results) == 0:
+        return line_items, errors
+    for line_item_ref in invoice_line_items.results[0].to:
+        line_item = api_line_items.get_by_id(
+            line_item_id=line_item_ref.id, properties=LINE_ITEM_PROPERTIES
+        )
+        line_item_args = {key: line_item.properties[key] for key in line_item.properties.keys()}
+        if line_item_args.get("hs_sku") is not None:
+            line_items.append(_build_line_item(line_item_args))
+        else:
+            message = "SKU is NOT set, skipping invoice line item"
+            logger.error(message)
+            errors.append(message)
+    return line_items, errors
 
-    if len(invoice_line_items.results) > 0:
-        for line_item in invoice_line_items.results[0].to:
-            line_item = api_line_items.get_by_id(
-                line_item_id=line_item.id,
-                properties=[
-                    "hs_sku",
-                    "amount",
-                    "quantity",
-                    "price",
-                    "voorraadnummer",
-                    "name",
-                    "kostenplaats",
-                    "grootboek",
-                    "gewicht",
-                    "artikelsoort",
-                    "artikelgroep",
-                    "hs_tax_rate_group_id",
-                    "btw",
-                    "discount",
-                    "hs_discount_percentage"
-                ],
-            )
-            line_item_args = {key: line_item.properties[key] for key in line_item.properties.keys()}
-            # fix types
-            quantity = int(line_item_args["quantity"])
-            line_item_args["quantity"] = quantity
-            amount = float(line_item_args["amount"])
-            line_item_args["amount"] = amount
-            price = float(line_item_args["price"])
-            line_item_args["price"] = price
-            line_item_args["btw"] = float((line_item_args.get("btw", 0)) or 0) * 100
-            discount_amount = float(line_item_args.get("discount", 0) or 0)
-            line_item_args["discount"] = discount_amount
-            line_item_args["hs_discount_percentage"] = float(line_item_args.get("hs_discount_percentage", 0) or 0)
-            # if discount amount is not 0, calculate the line item percentage ourselves
-            if discount_amount != 0:
-                discount_percentage = round(discount_amount/(quantity*price)*100, 2)
-                line_item_args["hs_discount_percentage"] = discount_percentage
-            if "hs_sku" in line_item_args and line_item_args["hs_sku"] is not None:
-                invoice.line_items.append(LineItem(**line_item_args))
-            else:
-                message = "SKU is NOT set, skipping invoice line item"
-                logger.error(message)
-                errors.append(message)
+
+def get_invoice_details(api_client, invoice: Invoice):
+    api_companies = api_client.crm.companies.basic_api
+    api_contacts = api_client.crm.contacts.basic_api
+    api_line_items = api_client.crm.line_items.basic_api
+
+    company_id = _read_first_association_id(api_client, invoice.id, "companies")
+    company = _fetch_company(api_companies, company_id) if company_id is not None else None
+
+    contact_id = _read_first_association_id(api_client, invoice.id, "contacts")
+    contact = _fetch_contact(api_contacts, contact_id) if contact_id is not None else None
+
+    line_items, errors = _fetch_line_items(api_client, api_line_items, invoice.id)
+    invoice.line_items.extend(line_items)
+
     return company, contact, errors
 
 
