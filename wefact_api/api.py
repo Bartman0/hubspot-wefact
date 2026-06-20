@@ -13,72 +13,44 @@ logger = logging.getLogger(__name__)
 
 
 class WeFactBase(ABC):
+    _controller: str | None = None
+
     def __init__(self):
         self._url = WEFACT_API_URL
-        self._controller = None
 
     def _build_request(self, action):
-        return {"api_key": WEFACT_API_KEY, "controller": self._controller, "action": action, }
+        return {"api_key": WEFACT_API_KEY, "controller": self._controller, "action": action}
 
-    def request(self, action, data: dict):
-        return requests.post(self._url, data=json.dumps(self._build_request(action) | data)).json()
+    def request(self, action, data: dict | None = None):
+        payload = self._build_request(action) | (data or {})
+        return requests.post(self._url, data=json.dumps(payload)).json()
+
+    def list(self):
+        return self.request("list", {})
+
+    def show(self, data):
+        return self.request("show", data)
+
+    def add(self, data):
+        return self.request("add", data)
+
+    def edit(self, data):
+        return self.request("edit", data)
 
 
 class InvoiceClient(WeFactBase):
-    def __init__(self):
-        super().__init__()
-        self._controller = "invoice"
-
-    def list(self):
-        return self.request("list", {})
-
-    def show(self, invoice):
-        return self.request("show", data=invoice)
-
-    def add(self, invoice):
-        return self.request("add", data=invoice)
-
-    def edit(self, invoice):
-        return self.request("edit", data=invoice)
+    _controller = "invoice"
 
     def download(self, invoice):
-        return self.request("download", data=invoice)
+        return self.request("download", invoice)
 
     def sendbyemail(self, invoice):
-        return self.request("sendbyemail", data=invoice)
+        return self.request("sendbyemail", invoice)
 
 
 class DebtorClient(WeFactBase):
-    def __init__(self):
-        super().__init__()
-        self._controller = "debtor"
-
-    def list(self):
-        return self.request("list", {})
-
-    def show(self, debtor):
-        return self.request("show", data=debtor)
-
-    def add(self, debtor):
-        return self.request("add", data=debtor)
-
-    def edit(self, debtor):
-        return self.request("edit", data=debtor)
+    _controller = "debtor"
 
 
 class ProductClient(WeFactBase):
-    def __init__(self):
-        super().__init__()
-        self._controller = "product"
-
-    def list(self):
-        return self.request("list", {})
-
-    def show(self, product):
-        return self.request("show", data=product)
-
-    def add(self, product):
-        return self.request("add", data=product)
-
-    def edit(self, product):
-        return self.request("edit", data=product)
+    _controller = "product"
