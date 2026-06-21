@@ -131,6 +131,12 @@ class TestInvoiceBuilders:
         a.errors.append("boom")
         assert "boom" in a.errors
 
+    def test_result_type_persist_defaults_to_false(self):
+        # persist drives whether main.py writes the invoice id to the state db;
+        # it must default to False so nothing is persisted unless explicitly set.
+        assert ResultType().persist is False
+        assert ResultType(persist=True).persist is True
+
     def test_invoice_data_id_from_model(self):
         assert invoice_data_id_from_model(make_invoice()) == {"InvoiceCode": "F2024-001"}
 

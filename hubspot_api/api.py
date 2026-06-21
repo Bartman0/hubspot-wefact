@@ -86,6 +86,7 @@ def get_invoices(api_client: HubSpot, after):
         "land__factuur_",
         "hs_total_discount",
         "hs_discount_percentage",
+        "relatienummer_factuur"
     ]
 
     invoices_hubspot = api_invoices.get_page(after=after, properties=properties)

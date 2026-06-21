@@ -1,10 +1,8 @@
 import base64
-import datetime
 from collections import namedtuple
 from enum import IntEnum
 
 from models.company import Company
-from models.contact import Contact
 from models.invoice import Invoice
 from models.line_item import LineItem
 from wefact_api.api import InvoiceClient, DebtorClient, ProductClient
@@ -14,7 +12,7 @@ from wefact_api.product import product_data_add_from_model, product_data_edit_fr
 WEFACT_STATUS_SUCCESS = "success"
 WEFACT_STATUS_ERROR = "error"
 
-ResultType = namedtuple("result", ["data", "errors"], defaults=[{}, []])
+ResultType = namedtuple("result", ["persist", "data", "errors"], defaults=[False, {}, []])
 
 
 class InvoiceStatus(IntEnum):
@@ -67,7 +65,7 @@ def invoice_line_data_from_model(line_item: LineItem):
 
 
 def invoice_update_paid(code):
-    result = ResultType(data={}, errors=[])
+    result = ResultType(persist=False, data={}, errors=[])
     result.data["InvoiceCode"] = code
     result.data["Status"] = int(InvoiceStatus.Betaald)
     api_client_invoice = InvoiceClient()
@@ -83,13 +81,14 @@ def invoice_update_paid(code):
 
 
 def generate_invoice(invoice_object: Invoice, company_object: Company):
-    result = ResultType(data={}, errors=[])
+    result = ResultType(persist=False, data={}, errors=[])
     api_client_invoice = InvoiceClient()
     invoice_number = f"{invoice_object.number}"
     invoice_object.number = invoice_number
     invoice = api_client_invoice.show(invoice_data_id(invoice_number))
     if invoice["status"] != WEFACT_STATUS_ERROR:
         # invoice was found (= no error)
+        result = ResultType(persist=True, data={}, errors=[])
         result.errors.append("invoice already exists")
         return result
     # make sure the debtor exists which is used on the invoice
