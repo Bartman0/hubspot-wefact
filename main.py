@@ -50,11 +50,6 @@ def _determine_action(db_status, invoice):
 def process_batch_of_invoices(api_client, connection, next_invoice):
     invoices, next_invoice = get_invoices(api_client, next_invoice)
     for invoice in invoices:
-        # TODO refactor PAID and OPEN invoices
-        # differentiate state in database
-        # PAID invoices do not retrieve details
-        # OPEN invoices do retrieve details
-
         # verwerk alleen facturen met PAID of OPEN status
         db_status = determine_db_status(connection, invoice)
         action = _determine_action(db_status, invoice)
@@ -62,15 +57,11 @@ def process_batch_of_invoices(api_client, connection, next_invoice):
             logger.debug(f"skipping invoice {invoice.number}[{invoice.id}]")
             continue
         if action == ACTION_PROCESSED:
-            logger.info(
-                f"invoice already processed, skipping invoice {invoice.number}[{invoice.id}]"
-            )
+            logger.info(f"invoice already processed, skipping invoice {invoice.number}[{invoice.id}]")
             continue
         (company, contact, errors) = get_invoice_details(api_client, invoice)
         if len(errors) > 0:
-            logger.error(
-                f"invoice contains errors {errors}, skipping invoice {invoice.number}[{invoice.id}]"
-            )
+            logger.error(f"invoice contains errors {errors}, skipping invoice {invoice.number}[{invoice.id}]")
             create_task(api_client, company.id, "errors to be fixed", f"invoice details for {invoice.number} contain errors: {errors}")
             continue
         # verwerk alleen facturen met PAID of OPEN status
