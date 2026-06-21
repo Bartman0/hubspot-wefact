@@ -1,15 +1,23 @@
 import os
-from fastapi import FastAPI, BackgroundTasks, HTTPException, Header, Depends
-from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional, List
-import docker
 import uuid
-from typing import Dict
+from typing import Dict, Optional
 
-VALID_API_KEY = os.environ["API_KEY"]
+import docker
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
+
+from auth import verify_api_key
+
+HOST_DATA_PATH = os.environ["HOST_DATA_PATH"]
+HUBSPOT_ACCESS_TOKEN = os.environ["HUBSPOT_ACCESS_TOKEN"]
+WEFACT_API_KEY = os.environ["WEFACT_API_KEY"]
 
 IMAGE = "creathlon/hubspot-wefact"
-HOST_DATA_PATH = os.environ["HOST_DATA_PATH"]
+
+STATUS_QUEUED = "queued"
+STATUS_RUNNING = "running"
+STATUS_COMPLETED = "completed"
+STATUS_FAILED = "failed"
 
 app = FastAPI()
 app.add_middleware(
@@ -31,15 +39,15 @@ def execute_docker_container(task_id: str, image: str, command: str):
     The worker function that runs in the background.
     """
     try:
-        tasks[task_id]["status"] = "running"
+        tasks[task_id]["status"] = STATUS_RUNNING
 
         # Run the container
         container = client.containers.run(
             image=image,
             command=command,
             environment={
-                "HUBSPOT_ACCESS_TOKEN": os.environ["HUBSPOT_ACCESS_TOKEN"],
-                "WEFACT_API_KEY": os.environ["WEFACT_API_KEY"],
+                "HUBSPOT_ACCESS_TOKEN": HUBSPOT_ACCESS_TOKEN,
+                "WEFACT_API_KEY": WEFACT_API_KEY,
             },
             detach=True,
             volumes={
@@ -56,7 +64,7 @@ def execute_docker_container(task_id: str, image: str, command: str):
 
         tasks[task_id].update(
             {
-                "status": "completed",
+                "status": STATUS_COMPLETED,
                 "exit_code": result["StatusCode"],
                 "output": logs.strip(),
             }
@@ -64,38 +72,18 @@ def execute_docker_container(task_id: str, image: str, command: str):
 
         container.remove()
     except Exception as e:
-        tasks[task_id].update({"status": "failed", "error": str(e)})
-
-
-def verify_api_key(authorization: Optional[str] = Header(None)):
-    """
-    Checks if the Bearer token matches our expected key.
-    """
-    if authorization is None:
-        raise HTTPException(status_code=401, detail="Missing authorization header")
-
-    # Expecting format: "Bearer sk-..."
-    try:
-        scheme, token = authorization.split()
-        if scheme.lower() != "bearer" or token != VALID_API_KEY:
-            raise HTTPException(status_code=403, detail="Invalid API key")
-    except ValueError:
-        raise HTTPException(
-            status_code=400, detail="Invalid authorization header format"
-        )
-
-    return token
+        tasks[task_id].update({"status": STATUS_FAILED, "error": str(e)})
 
 
 @app.post("/tasks", status_code=202)
 async def create_task(
     background_tasks: BackgroundTasks,
     image: str = IMAGE,
-    command: str = None,
+    command: Optional[str] = None,
     token: str = Depends(verify_api_key),
 ):
     task_id = str(uuid.uuid4())
-    tasks[task_id] = {"status": "queued", "image": image}
+    tasks[task_id] = {"status": STATUS_QUEUED, "image": image}
 
     # Schedule the docker run to happen in the background
     background_tasks.add_task(execute_docker_container, task_id, image, command)

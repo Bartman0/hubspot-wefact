@@ -3,17 +3,17 @@ from pydantic import BaseModel
 
 class LineItem(BaseModel):
     hs_sku: str
+    name: str
     amount: float
     quantity: int
     price: float
-    voorraadnummer: str | None
-    name: str
-    kostenplaats: str | None
-    grootboek: str | None
-    gewicht: str | None
-    artikelsoort: str | None
-    artikelgroep: str | None
-    hs_tax_rate_group_id: str | None
     btw: float
-    discount: float
-    hs_discount_percentage: float
+    discount: float = 0.0
+    hs_discount_percentage: float = 0.0
+    voorraadnummer: str | None = None
+    kostenplaats: str | None = None
+    grootboek: str | None = None
+    gewicht: str | None = None
+    artikelsoort: str | None = None
+    artikelgroep: str | None = None
+    hs_tax_rate_group_id: str | None = None

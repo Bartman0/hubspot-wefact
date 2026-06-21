@@ -1,22 +1,18 @@
 import base64
-import datetime
 from collections import namedtuple
 from enum import IntEnum
 
 from models.company import Company
-from models.contact import Contact
 from models.invoice import Invoice
 from models.line_item import LineItem
 from wefact_api.api import InvoiceClient, DebtorClient, ProductClient
 from wefact_api.debtor import debtor_data_id_from_model, debtor_data_add_from_model, debtor_data_edit_from_model
-from wefact_api.product import product_data_add_from_model, product_data_id_from_model
+from wefact_api.product import product_data_add_from_model, product_data_edit_from_model, product_data_id_from_model
 
-WEFACT_INVOICE_STATUS_SUCCESS = "success"
-WEFACT_INVOICE_STATUS_ERROR = "error"
-WEFACT_PRODUCT_STATUS_SUCCESS = "success"
-WEFACT_PRODUCT_STATUS_ERROR = "error"
+WEFACT_STATUS_SUCCESS = "success"
+WEFACT_STATUS_ERROR = "error"
 
-ResultType = namedtuple("result", ["data", "errors"], defaults=[{}, []])
+ResultType = namedtuple("result", ["persist", "data", "errors"], defaults=[False, {}, []])
 
 
 class InvoiceStatus(IntEnum):
@@ -69,7 +65,7 @@ def invoice_line_data_from_model(line_item: LineItem):
 
 
 def invoice_update_paid(code):
-    result = ResultType(data={}, errors=[])
+    result = ResultType(persist=False, data={}, errors=[])
     result.data["InvoiceCode"] = code
     result.data["Status"] = int(InvoiceStatus.Betaald)
     api_client_invoice = InvoiceClient()
@@ -84,31 +80,21 @@ def invoice_update_paid(code):
     return result
 
 
-def update_invoice(invoice):
-    result = ResultType(data={}, errors=[])
-    api_client_invoice = InvoiceClient()
-    invoice_number = f"{invoice.number}"
-    invoice = api_client_invoice.edit(invoice_data_id(invoice_number))
-    if invoice["status"] != "error":
-        result.errors.append("invoice already exists")
-        return result
-    return result
-
-
 def generate_invoice(invoice_object: Invoice, company_object: Company):
-    result = ResultType(data={}, errors=[])
+    result = ResultType(persist=False, data={}, errors=[])
     api_client_invoice = InvoiceClient()
     invoice_number = f"{invoice_object.number}"
     invoice_object.number = invoice_number
     invoice = api_client_invoice.show(invoice_data_id(invoice_number))
-    if invoice["status"] != WEFACT_INVOICE_STATUS_ERROR:
+    if invoice["status"] != WEFACT_STATUS_ERROR:
         # invoice was found (= no error)
+        result = ResultType(persist=True, data={}, errors=[])
         result.errors.append("invoice already exists")
         return result
     # make sure the debtor exists which is used on the invoice
     api_client_debtor = DebtorClient()
     company = api_client_debtor.show(debtor_data_id_from_model(company_object))
-    if company["status"] == WEFACT_INVOICE_STATUS_ERROR:
+    if company["status"] == WEFACT_STATUS_ERROR:
         # debtor not found
         api_client_debtor.add(debtor_data_add_from_model(company_object))
     else:
@@ -117,19 +103,19 @@ def generate_invoice(invoice_object: Invoice, company_object: Company):
     api_client_product = ProductClient()
     for line_item in invoice_object.line_items:
         product = api_client_product.show(product_data_id_from_model(line_item))
-        if product["status"] == WEFACT_PRODUCT_STATUS_ERROR:
+        if product["status"] == WEFACT_STATUS_ERROR:
             # product not found
-            response = api_client_product.add(product_data_add_from_model(line_item))
-        elif product["status"] == WEFACT_PRODUCT_STATUS_SUCCESS:
-            response = api_client_product.edit(product_data_add_from_model(line_item))
+            api_client_product.add(product_data_add_from_model(line_item))
+        elif product["status"] == WEFACT_STATUS_SUCCESS:
+            api_client_product.edit(product_data_edit_from_model(product["product"]["Identifier"], line_item))
     # now build the invoice line items
     invoice = api_client_invoice.add(invoice_data_from_model(invoice_object, company_object))
-    if invoice["status"] == WEFACT_INVOICE_STATUS_ERROR:
+    if invoice["status"] == WEFACT_STATUS_ERROR:
         result.errors.append("error processing invoice:")
         result.errors.extend(invoice['errors'])
         return result
     download_result = api_client_invoice.download(invoice_data_id(invoice_number))
-    if invoice["status"] == WEFACT_INVOICE_STATUS_SUCCESS:
+    if invoice["status"] == WEFACT_STATUS_SUCCESS:
         pdf = base64.b64decode(download_result["invoice"]["Base64"])
         result.data["pdf"] = pdf
     return result

@@ -40,12 +40,7 @@
       button:hover {
         background-color: #0056b3;
       }
-      #status {
-        margin-top: 20px;
-        padding: 10px;
-        border-radius: 4px;
-        display: none;
-      }
+      #status,
       #fetchResponse {
         margin-top: 20px;
         padding: 10px;
@@ -77,40 +72,44 @@
     </div>
 
     <script>
-      async function fetchResponse(id) {
-        console.log("Button clicked for task ID:", id);
-        const apiKey = document.getElementById("apiKey").value;
-        const responseDiv = document.getElementById("response");
+      // Requests are same-origin: Caddy serves this page and reverse-proxies
+      // /tasks* to the backend on the same host, so no API base URL is needed.
+      const API_BASE = "";
 
+      async function apiRequest(path, method) {
+        const apiKey = document.getElementById("apiKey").value;
         try {
-          // Note: If this page is HTTPS, localhost:8000 must also be HTTPS
-          const response = await fetch(
-            `http://85.215.134.144:8443/tasks/${id}`,
-            {
-              method: "GET",
-              headers: {
-                Authorization: `Bearer ${apiKey}`,
-                "Content-Type": "application/json",
-              },
+          const response = await fetch(`${API_BASE}${path}`, {
+            method,
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
             },
-          );
-          if (response.ok) {
-            const data = await response.json();
-            responseDiv.textContent = data.output;
-            responseDiv.style.display = "block";
-          } else {
+          });
+          if (!response.ok) {
             showStatus(
               `Error: ${response.status} - ${response.statusText}`,
               "error",
             );
+            return null;
           }
+          return await response.json();
         } catch (err) {
           showStatus(
-            "Connection failed. Ensure your local service is running and CORS is enabled.",
+            "Connection failed. Ensure the service is running.",
             "error",
           );
           console.error(err);
+          return null;
         }
+      }
+
+      async function fetchResponse(id) {
+        const responseDiv = document.getElementById("response");
+        const data = await apiRequest(`/tasks/${id}`, "GET");
+        if (!data) return;
+        responseDiv.textContent = data.output;
+        responseDiv.style.display = "block";
       }
 
       async function fetchTasks() {
@@ -130,35 +129,13 @@
           return;
         }
 
-        try {
-          // Note: If this page is HTTPS, localhost:8000 must also be HTTPS
-          const response = await fetch("http://85.215.134.144:8443/tasks", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${apiKey}`,
-              "Content-Type": "application/json",
-            },
-          });
-          if (response.ok) {
-            const data = await response.json();
-            showStatus(`${data.message} (${data.task_id})`, data.status);
-            responseButton.onclick = () => {
-              fetchResponse(data.task_id);
-            };
-            fetchResponseDiv.style.display = "block";
-          } else {
-            showStatus(
-              `Error: ${response.status} - ${response.statusText}`,
-              "error",
-            );
-          }
-        } catch (err) {
-          showStatus(
-            "Connection failed. Ensure your local service is running and CORS is enabled.",
-            "error",
-          );
-          console.error(err);
-        }
+        const data = await apiRequest("/tasks", "POST");
+        if (!data) return;
+        showStatus(`${data.message} (${data.task_id})`, data.status);
+        responseButton.onclick = () => {
+          fetchResponse(data.task_id);
+        };
+        fetchResponseDiv.style.display = "block";
       }
 
       function showStatus(msg, type) {
