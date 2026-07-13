@@ -84,7 +84,7 @@ class TestProductBuilders:
             "ProductName": "Widget",
             "ProductKeyPhrase": "Widget",
             "PriceExcl": 10.0,
-            "AccountingCostCentre": "123"
+            "AccountingCostCentre": 123
         }
 
     def test_product_data_edit_from_model_includes_identifier(self):
@@ -94,7 +94,7 @@ class TestProductBuilders:
             "ProductName": "Widget",
             "ProductKeyPhrase": "Widget",
             "PriceExcl": 10.0,
-            "AccountingCostCentre": "123"
+            "AccountingCostCentre": 123
         }
 
 
@@ -144,14 +144,14 @@ class TestInvoiceBuilders:
         assert invoice_data_id_from_model(make_invoice()) == {"InvoiceCode": "F2024-001"}
 
     def test_invoice_line_data_from_model(self):
-        item = make_line_item(quantity=3, btw=21.0, hs_discount_percentage=10.0, kostenplaats="123")
+        item = make_line_item(quantity=3, btw=21.0, hs_discount_percentage=10.0, kostenplaats=123)
         assert invoice_line_data_from_model(item) == {
             "ProductCode": "SKU1",
             "Number": 3,
             "TaxPercentage": 21.0,
             "DiscountPercentageType": "line",
             "DiscountPercentage": 10.0,
-            "AccountingCostCentre": "123"
+            "AccountingCostCentre": 123
         }
 
     def test_invoice_data_formats_date_and_sets_sent_status(self):
