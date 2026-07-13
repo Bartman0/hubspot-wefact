@@ -55,13 +55,13 @@ def invoice_data_from_model(invoice: Invoice, company: Company):
     return invoice_data(invoice.number, company.relatienummer, invoice.invoice_date, term, invoice.korting, invoice_lines, custom_fields, invoice.land)
 
 
-def invoice_line_data(code, number, tax_percentage, discount_percentage):
+def invoice_line_data(code, number, tax_percentage, discount_percentage, cost_center):
     return {"ProductCode": code, "Number": number, "TaxPercentage": tax_percentage, "DiscountPercentageType": "line",
-            "DiscountPercentage": discount_percentage}
+            "DiscountPercentage": discount_percentage, "AccountingCostCentre": cost_center}
 
 
 def invoice_line_data_from_model(line_item: LineItem):
-    return invoice_line_data(line_item.hs_sku, line_item.quantity, line_item.btw, line_item.hs_discount_percentage)
+    return invoice_line_data(line_item.hs_sku, line_item.quantity, line_item.btw, line_item.hs_discount_percentage, line_item.kostenplaats)
 
 
 def invoice_update_paid(code):
