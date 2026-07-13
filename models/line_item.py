@@ -17,3 +17,4 @@ class LineItem(BaseModel):
     artikelsoort: str | None = None
     artikelgroep: str | None = None
     hs_tax_rate_group_id: str | None = None
+
