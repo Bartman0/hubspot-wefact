@@ -18,6 +18,11 @@ def product_data_edit(id, code, name, key_phrase, price, cost_center):
             "PriceExcl": price, "AccountingCostCentre": cost_center}
 
 
+def product_data_edit(id, code, name, key_phrase, price):
+    return {"Identifier": id, "ProductCode": code, "ProductName": name, "ProductKeyPhrase": key_phrase,
+            "PriceExcl": price}
+
+
 def product_data_add_from_model(line_item: LineItem):
     return product_data_add(line_item.hs_sku, line_item.name, line_item.name, line_item.price, line_item.kostenplaats)
 
