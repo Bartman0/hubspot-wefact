@@ -26,9 +26,12 @@ FROM python:3.12-slim-trixie
 # Python executable must be the same, e.g., using `python:3.11-slim-bookworm`
 # will fail.
 
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
 # Setup a non-root user
 RUN groupadd --system --gid 999 nonroot \
-  && useradd --system --gid 999 --uid 999 --create-home nonroot
+  && useradd --system --gid 999 --uid 999 --create-home -l nonroot
 
 # Copy the application from the builder
 COPY --from=builder --chown=nonroot:nonroot /app /app
