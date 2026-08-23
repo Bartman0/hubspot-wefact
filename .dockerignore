@@ -5,3 +5,4 @@
 *.pdf
 build/
 dist/
+.docker-build-stamp
