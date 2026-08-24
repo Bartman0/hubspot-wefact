@@ -6,6 +6,14 @@ from models.line_item import LineItem
 
 
 class Invoice(BaseModel):
+    """A HubSpot invoice, normalised for the WeFact side of the sync.
+
+    number is the HubSpot invoice number and doubles as the WeFact InvoiceCode
+    and as the state-database key. The Dutch fields from betreft onwards are
+    invoice-level HubSpot custom properties that are passed through to WeFact
+    custom fields; korting is the invoice-level discount.
+    """
+
     id: str
     number: str
     status: str
