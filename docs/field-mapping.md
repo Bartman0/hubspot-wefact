@@ -166,13 +166,13 @@ flowchart LR
 
 ## 1. Invoice
 
-HubSpot invoice object (`get_invoices` / `hubspot_api/api.py:70`) → `Invoice` model
-(`models/invoice.py`) → WeFact invoice (`invoice_data_from_model` / `wefact_api/invoice.py:41`).
+HubSpot invoice object (`get_invoices` / `src/modules/hubspot_client/api.py:70`) → `Invoice` model
+(`src/modules/models/invoice.py`) → WeFact invoice (`invoice_data_from_model` / `src/modules/wefact_client/invoice.py:41`).
 
 | HubSpot property | `Invoice` field | WeFact field | Notes |
 |---|---|---|---|
 | `hs_number` | `number` | `InvoiceCode` | |
-| `hs_invoice_status` | `status` | — | drives sync state (`state/db.py`), not sent; WeFact `Status` hardcoded to `Verzonden` |
+| `hs_invoice_status` | `status` | — | drives sync state (`src/modules/state/db.py`), not sent; WeFact `Status` hardcoded to `Verzonden` |
 | `hs_amount_billed` | `amount_billed` | — | fetched, not sent |
 | `hs_invoice_date` | `invoice_date` | `Date` | |
 | `hs_due_date` | `due_date` | — | combined with `invoice_date` → `Term` = `(due_date − invoice_date).days` |
@@ -188,16 +188,16 @@ HubSpot invoice object (`get_invoices` / `hubspot_api/api.py:70`) → `Invoice` 
 | `relatienummer_factuur` | `relatienummer` | `CustomFields.factuurrelatienummer` | informational only — does not set `DebtorCode` (intended) |
 | `hs_balance_due`, `hs_discount_percentage` | — | — | requested in `properties` but never read into the model |
 
-WeFact `DebtorCode` comes from `company.relatienummer` (`wefact_api/invoice.py:55`), not the invoice.
+WeFact `DebtorCode` comes from `company.relatienummer` (`src/modules/wefact_client/invoice.py:55`), not the invoice.
 
 ## 2. Company → Debtor
 
-HubSpot company (`_fetch_company` / `hubspot_api/api.py:159`) → `Company` model
-(`models/company.py`) → WeFact debtor (`wefact_api/debtor.py`).
+HubSpot company (`_fetch_company` / `src/modules/hubspot_client/api.py:159`) → `Company` model
+(`src/modules/models/company.py`) → WeFact debtor (`src/modules/wefact_client/debtor.py`).
 
 | HubSpot property | `Company` field | WeFact field | Notes |
 |---|---|---|---|
-| `relatie_nummer` | `relatienummer` | `DebtorCode` | falls back to `company_id` if empty (`hubspot_api/api.py:170`) |
+| `relatie_nummer` | `relatienummer` | `DebtorCode` | falls back to `company_id` if empty (`src/modules/hubspot_client/api.py:170`) |
 | `name` | `name` | `CompanyName` | |
 | `address` | `address` | `Address` | |
 | `zip` | `zip` | `ZipCode` | |
@@ -208,9 +208,9 @@ HubSpot company (`_fetch_company` / `hubspot_api/api.py:159`) → `Company` mode
 
 ## 3. Line item → Product + Invoice line
 
-HubSpot line_item (`_fetch_line_items` / `hubspot_api/api.py:202`) → `LineItem` model
-(`models/line_item.py`) → WeFact product (`wefact_api/product.py`) and invoice line
-(`wefact_api/invoice.py:63`).
+HubSpot line_item (`_fetch_line_items` / `src/modules/hubspot_client/api.py:202`) → `LineItem` model
+(`src/modules/models/line_item.py`) → WeFact product (`src/modules/wefact_client/product.py`) and invoice line
+(`src/modules/wefact_client/invoice.py:63`).
 
 | HubSpot property | `LineItem` field | WeFact field | Notes |
 |---|---|---|---|
@@ -226,6 +226,6 @@ HubSpot line_item (`_fetch_line_items` / `hubspot_api/api.py:202`) → `LineItem
 
 ## 4. Contact
 
-`Contact` (`_fetch_contact` / `hubspot_api/api.py:174`) is fetched (`lastname`,
+`Contact` (`_fetch_contact` / `src/modules/hubspot_client/api.py:174`) is fetched (`lastname`,
 `factuur_toelichting`) and returned from `get_invoice_details`, but is **never mapped to any
 WeFact object** in the current code.

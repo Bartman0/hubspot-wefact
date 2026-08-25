@@ -2,7 +2,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-from models.invoice import Invoice
+from modules.models.invoice import Invoice
 
 
 INVOICE_STATUS_OPEN = "open"

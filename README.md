@@ -17,9 +17,9 @@ HubSpot invoices ──> state db check ──> WeFact (debtor, products, invoic
 
 For each invoice on a page of HubSpot results:
 
-1. **Look up progress.** `state/db.py` reports what was already synced for this
+1. **Look up progress.** `src/modules/state/db.py` reports what was already synced for this
    invoice number: `unknown`, `open` or `paid`.
-2. **Decide the action** (`_determine_action` in `main.py`):
+2. **Decide the action** (`_determine_action` in `src/main.py`):
 
    | HubSpot status | state db | action                                                |
    | -------------- | -------- | ----------------------------------------------------- |
@@ -44,17 +44,21 @@ Paging repeats this until HubSpot stops returning a cursor.
 
 ## Layout
 
-| Path              | What lives there                                                                  |
-| ----------------- | --------------------------------------------------------------------------------- |
-| `main.py`         | The sync run: paging, per-invoice decisions, PDF attachment                        |
-| `hubspot_api/`    | HubSpot client, invoice/company/contact/line-item reads, notes, tasks, file upload |
-| `wefact_api/`     | WeFact v2 client (`api.py`) and the request builders per object type               |
-| `models/`         | Pydantic models shared by both sides: `Invoice`, `LineItem`, `Company`, `Contact`  |
-| `state/db.py`     | The SQLite progress database                                                      |
-| `service/`        | Optional FastAPI service that triggers a sync run in a Docker container            |
-| `web/`            | Static trigger page plus the Caddy config that fronts the service                 |
-| `tests/`          | pytest suite; no network calls, everything is faked                                |
-| `docs/`           | Field mapping (`field-mapping.md`) and process diagrams                            |
+| Path                       | What lives there                                                                  |
+| -------------------------- | --------------------------------------------------------------------------------- |
+| `src/main.py`              | The sync run: paging, per-invoice decisions, PDF attachment                        |
+| `src/modules/hubspot_client/` | HubSpot client, invoice/company/contact/line-item reads, notes, tasks, file upload |
+| `src/modules/wefact_client/`  | WeFact v2 client (`api.py`) and the request builders per object type               |
+| `src/modules/models/`      | Pydantic models shared by both sides: `Invoice`, `LineItem`, `Company`, `Contact`  |
+| `src/modules/state/db.py`  | The SQLite progress database                                                      |
+| `service/`                 | Optional FastAPI service that triggers a sync run in a Docker container            |
+| `web/`                     | Static trigger page plus the Caddy config that fronts the service                 |
+| `tests/`                   | pytest suite; no network calls, everything is faked                                |
+| `docs/`                    | Field mapping (`field-mapping.md`) and process diagrams                            |
+
+`src/` is the import root: `src/main.py` imports the packages under
+`src/modules/` as `modules.<package>`, and pytest picks the same root up via
+`pythonpath` in `pyproject.toml`.
 
 A note on naming: the models keep the Dutch HubSpot property names
 (`betreft`, `relatienummer`, `kostenplaats`, `korting`) because they map
@@ -80,7 +84,7 @@ immediately if either is missing.
 | `API_KEY`              | service  | Bearer token callers must present to the FastAPI service                |
 | `HOST_DATA_PATH`       | service  | Host directory the service mounts into the container at `/app/data`     |
 
-`main.py` calls `load_dotenv()`, so a local `.env` file works too. `.env` and
+`src/main.py` calls `load_dotenv()`, so a local `.env` file works too. `.env` and
 `.envrc` are gitignored — **keep them out of version control, they hold live
 credentials.**
 
@@ -97,7 +101,7 @@ Where state and PDFs land:
 uv sync
 export HUBSPOT_ACCESS_TOKEN=...
 export WEFACT_API_KEY=...
-uv run python main.py
+uv run python src/main.py
 ```
 
 ### With Docker
@@ -152,7 +156,7 @@ the WeFact payload builders, and the model validation rules.
 
 ## Building the standalone executables
 
-`hubspot-wefact.spec` is a PyInstaller spec that bundles `main.py` into a single
+`hubspot-wefact.spec` is a PyInstaller spec that bundles `src/main.py` into a single
 console executable, used for the macOS `.pkg` and the Windows build. The
 `Scripts/preinstall` and `Scripts/postinstall` hooks belong to the macOS
 installer: they create `~/.local/hubspot-wefact/bin` and then move the shortcut

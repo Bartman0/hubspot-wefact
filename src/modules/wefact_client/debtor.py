@@ -1,4 +1,4 @@
-from models.company import Company
+from modules.models.company import Company
 
 
 def debtor_data_id(code):

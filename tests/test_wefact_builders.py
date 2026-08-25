@@ -1,10 +1,10 @@
 from datetime import date
 
-from models.company import Company
-from models.invoice import Invoice
-from models.line_item import LineItem
-from wefact_api import debtor, product
-from wefact_api.invoice import (
+from modules.models.company import Company
+from modules.models.invoice import Invoice
+from modules.models.line_item import LineItem
+from modules.wefact_client import debtor, product
+from modules.wefact_client.invoice import (
     InvoiceStatus,
     ResultType,
     invoice_data,

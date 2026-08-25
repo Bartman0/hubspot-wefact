@@ -1,4 +1,4 @@
-from hubspot_api.api import _build_line_item
+from modules.hubspot_client.api import _build_line_item
 
 
 def base_args(**overrides):

@@ -4,9 +4,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import main
-from models.invoice import Invoice
-from state.db import INVOICE_STATUS_OPEN
-from wefact_api.invoice import ResultType
+from modules.models.invoice import Invoice
+from modules.state.db import INVOICE_STATUS_OPEN
+from modules.wefact_client.invoice import ResultType
 
 
 def make_invoice(status=INVOICE_STATUS_OPEN):

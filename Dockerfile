@@ -46,4 +46,4 @@ USER nonroot
 WORKDIR /app
 
 # Run the application
-CMD ["python", "main.py"]
+CMD ["python", "src/main.py"]

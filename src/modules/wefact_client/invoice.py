@@ -2,13 +2,13 @@ import base64
 from collections import namedtuple
 from enum import IntEnum
 
-from hubspot_api.api import logger
-from models.company import Company
-from models.invoice import Invoice
-from models.line_item import LineItem
-from wefact_api.api import InvoiceClient, DebtorClient, ProductClient
-from wefact_api.debtor import debtor_data_id_from_model, debtor_data_add_from_model, debtor_data_edit_from_model
-from wefact_api.product import product_data_add_from_model, product_data_edit_from_model, product_data_id_from_model
+from modules.hubspot_client.api import logger
+from modules.models.company import Company
+from modules.models.invoice import Invoice
+from modules.models.line_item import LineItem
+from modules.wefact_client.api import InvoiceClient, DebtorClient, ProductClient
+from modules.wefact_client.debtor import debtor_data_id_from_model, debtor_data_add_from_model, debtor_data_edit_from_model
+from modules.wefact_client.product import product_data_add_from_model, product_data_edit_from_model, product_data_id_from_model
 
 WEFACT_STATUS_SUCCESS = "success"
 WEFACT_STATUS_ERROR = "error"
