@@ -153,21 +153,3 @@ read secrets at import time can be imported, and HubSpot and WeFact are faked
 with `MagicMock` and `SimpleNamespace`. Covered areas are the status/action
 decision table, the state database, HubSpot property mapping and type coercion,
 the WeFact payload builders, and the model validation rules.
-
-## Building the standalone executables
-
-`hubspot-wefact.spec` is a PyInstaller spec that bundles `src/main.py` into a single
-console executable, used for the macOS `.pkg` and the Windows build. The
-`Scripts/preinstall` and `Scripts/postinstall` hooks belong to the macOS
-installer: they create `~/.local/hubspot-wefact/bin` and then move the shortcut
-into `~/Applications` and the state database into the home directory.
-
-PyInstaller is in the `dev` dependency group, so it is not baked into the Docker
-image:
-
-```bash
-uv sync --group dev
-uv run pyinstaller hubspot-wefact.spec
-```
-
-Build output lands in `build/` and `dist/` (both gitignored).
