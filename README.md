@@ -125,13 +125,22 @@ background Docker container. Every endpoint requires an
 `Authorization: Bearer $API_KEY` header.
 
 ```bash
-uv sync --group dev
+uv sync
 uv run uvicorn main:app --app-dir service
 ```
 
-`fastapi` lives in the `dev` group while `uvicorn` and `docker` are regular
-dependencies, so a bare `uv sync` is not enough to run the service — use
-`--group dev` as above.
+`fastapi`, `uvicorn` and `docker` are all regular dependencies, so a bare
+`uv sync` is enough. The `dev` group holds only `pytest`.
+
+`service/requirements.txt` is generated from the lock and is what
+`service/Dockerfile` installs:
+
+```bash
+uv export --format requirements.txt --no-dev --no-hashes > service/requirements.txt
+```
+
+Regenerate it whenever a runtime dependency changes, or the service image will
+be built against a stale set.
 
 | Endpoint             | Method | Description                                                     |
 | -------------------- | ------ | --------------------------------------------------------------- |
