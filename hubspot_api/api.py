@@ -4,9 +4,9 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import requests
 from hubspot import HubSpot
 from hubspot.crm.associations import BatchInputPublicObjectId
+from hubspot.crm.commerce.invoices import SimplePublicObjectInput as invoices_spoi
 from hubspot.crm.objects.notes import SimplePublicObjectInputForCreate as notes_spoifc
 from hubspot.crm.objects.tasks import SimplePublicObjectInputForCreate as tasks_spoifc
 from urllib3 import Retry
@@ -15,6 +15,7 @@ from models.company import Company
 from models.contact import Contact
 from models.invoice import Invoice
 from models.line_item import LineItem
+from state.db import INVOICE_STATUS_PAID
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,10 +26,19 @@ os.makedirs(INVOICES_BASE_PATH, exist_ok = True)
 
 
 def get_access_token_hubspot():
+    """Return the HubSpot private-app access token from the environment.
+
+    Raises KeyError when HUBSPOT_ACCESS_TOKEN is not set.
+    """
     return os.environ["HUBSPOT_ACCESS_TOKEN"]
 
 
 def get_api_client():
+    """Build a HubSpot client that retries server errors up to three times.
+
+    Retries use an exponential backoff and only fire on 500, 502 and 504, so
+    transient HubSpot outages do not abort a sync run.
+    """
     retry = Retry(
         total=3,
         backoff_factor=1,
@@ -38,16 +48,16 @@ def get_api_client():
     return api_client
 
 
-def get_taxes(api_client):
-    endpoint = "https://api.hubapi.com/tax-rates/v1/tax-rates"
-    headers = {"Authorization": "Bearer " + get_access_token_hubspot()}
-    response = requests.get(endpoint, headers=headers)
-    return {tax["id"]: {"name": tax["name"], "percentageRate": tax["percentageRate"], "id": tax["id"],
-                        "label": tax["label"]}
-            for tax in response.json()["results"]}
-
-
 def upload_invoice(api_client, filename, data):
+    """Write the PDF bytes to disk and upload them to the HubSpot /invoices folder.
+
+    The file is first written to INVOICES_BASE_PATH because the HubSpot files
+    API uploads from a path, not from memory. Existing files with the same name
+    are overwritten and the upload is publicly indexable.
+
+    Returns {"id": ..., "url": ...} for the uploaded file, both None when
+    HubSpot returns an empty response.
+    """
     file_path = INVOICES_BASE_PATH / filename
     with open(file_path, "wb") as file:
         file.write(data)
@@ -64,10 +74,25 @@ def upload_invoice(api_client, filename, data):
 
 
 def associate_file_to_company(api_client, company_id, title, file_id):
+    """Link an uploaded file to a company by creating a note that attaches it.
+
+    HubSpot has no direct file-to-company association, so a note carrying the
+    attachment id is used as the carrier.
+    """
     return create_note(api_client, company_id, title, file_id)
 
 
 def get_invoices(api_client: HubSpot, after):
+    """Read one page of HubSpot invoices and map them onto Invoice models.
+
+    after is the paging cursor from a previous call, or None for the first page.
+    Only the properties the sync needs are requested, including the Dutch
+    custom invoice fields (betreft, referentie, adres, ...). Line items are not
+    loaded here; get_invoice_details does that.
+
+    Returns (list of Invoice, next cursor) where the cursor is None on the last
+    page.
+    """
     api_invoices = api_client.crm.commerce.invoices.basic_api
     properties = [
         "hs_invoice_status",
@@ -158,6 +183,13 @@ def _read_first_association_id(api_client, invoice_id, to_object_type):
 
 
 def _fetch_company(api_companies, company_id):
+    """Load one HubSpot company and map it onto a Company model.
+
+    The raw HubSpot property dict is passed straight into the model, so keys
+    that are not model fields are silently dropped. relatienummer is derived
+    from relatie_nummer and falls back to the company id when that property is
+    missing or empty, because WeFact needs a non-empty debtor code.
+    """
     company_hubspot = api_companies.get_by_id(
         company_id=company_id, properties=["relatie_nummer", "name", "address", "zip", "city", "email", "mailadres_factuur", "land"]
     )
@@ -173,6 +205,11 @@ def _fetch_company(api_companies, company_id):
 
 
 def _fetch_contact(api_contacts, contact_id):
+    """Load one HubSpot contact and map it onto a Contact model.
+
+    Only lastname and factuur_toelichting are requested; the contact is
+    informational and is not sent to WeFact.
+    """
     contact_hubspot = api_contacts.get_by_id(
         contact_id=contact_id, properties=["lastname", "factuur_toelichting"]
     )
@@ -184,6 +221,15 @@ def _fetch_contact(api_contacts, contact_id):
 
 
 def _build_line_item(line_item_args):
+    """Coerce a raw HubSpot line-item property dict into a LineItem model.
+
+    HubSpot returns every property as a string, so quantity, amount, price,
+    btw and the discount fields are converted to numbers first. btw arrives as
+    a fraction (0.21) and is scaled to a percentage (21.0), because WeFact
+    expects TaxPercentage. When HubSpot supplies a discount amount rather than
+    a percentage, the line percentage is computed from quantity * price and
+    rounded to two decimals.
+    """
     # fix types
     quantity = int(line_item_args["quantity"])
     line_item_args["quantity"] = quantity
@@ -195,12 +241,18 @@ def _build_line_item(line_item_args):
     line_item_args["discount"] = discount_amount
     line_item_args["hs_discount_percentage"] = float(line_item_args.get("hs_discount_percentage", 0) or 0)
     # if discount amount is not 0, calculate the line item percentage ourselves
-    if discount_amount != 0:
+    if discount_amount != 0 and (quantity * price) != 0:
         line_item_args["hs_discount_percentage"] = round(discount_amount / (quantity * price) * 100, 2)
     return LineItem(**line_item_args)
 
 
 def _fetch_line_items(api_client, api_line_items, invoice_id):
+    """Load every line item associated with an invoice.
+
+    Line items without an hs_sku are dropped, because the SKU is the product
+    code WeFact keys its products on. Returns (line items, error messages);
+    both are empty when the invoice has no associated line items.
+    """
     line_items, errors = [], []
     batch_ids = BatchInputPublicObjectId([{"id": invoice_id}])
     invoice_line_items = api_client.crm.associations.batch_api.read(
@@ -225,6 +277,15 @@ def _fetch_line_items(api_client, api_line_items, invoice_id):
 
 
 def get_invoice_details(api_client, invoice: Invoice):
+    """Enrich an invoice with its associated company, contact and line items.
+
+    The line items are appended to invoice.line_items in place; the company and
+    contact are returned instead, and are None when the invoice has no such
+    association or when HubSpot reported an association error.
+
+    Returns (company, contact, errors), where a non-empty errors list means the
+    invoice is not fit to be sent to WeFact.
+    """
     api_companies = api_client.crm.companies.basic_api
     api_contacts = api_client.crm.contacts.basic_api
     api_line_items = api_client.crm.line_items.basic_api
@@ -242,6 +303,12 @@ def get_invoice_details(api_client, invoice: Invoice):
 
 
 def create_task(api_client, company_id, title, description):
+    """Create a high-priority HubSpot task on a company so a human can fix data.
+
+    Used when an invoice cannot be synced, for example because a line item has
+    no SKU. The task is due one day from now and is associated to the company
+    through the HubSpot-defined task-to-company association (type 192).
+    """
     api_tasks = api_client.crm.objects.tasks.basic_api
     task = tasks_spoifc(properties={
         "hs_task_subject": title,
@@ -263,6 +330,12 @@ def create_task(api_client, company_id, title, description):
 
 
 def create_note(api_client, company_id, title, file_id):
+    """Create a HubSpot note on a company with a file attached to it.
+
+    title becomes the note body; file_id is the id returned by upload_invoice.
+    The note is associated to the company through the HubSpot-defined
+    note-to-company association (type 190).
+    """
     api_notes = api_client.crm.objects.notes.basic_api
     note = notes_spoifc(properties={
         "hs_attachment_ids": f"{file_id}",
@@ -278,4 +351,29 @@ def create_note(api_client, company_id, title, file_id):
             "to": {"id": company_id}}
     ])
     response = api_notes.create(note)
+    return response
+
+
+
+def set_invoice_to_paid(api_client, invoice):
+    """Push a paid status from WeFact back onto the HubSpot invoice.
+
+    Called for invoices this sync already created in WeFact, to carry the
+    payment the other way: WeFact owns whether an invoice was settled, HubSpot
+    needs to reflect it.
+
+    Whether the invoice really is paid is decided by the caller: main.py looks
+    the invoice up with get_invoice_status and only lands here once
+    wefact_api.invoice.invoice_is_paid confirmed it. This unconditionally sets
+    hs_invoice_status to paid, updates invoice.status to match and returns the
+    updated HubSpot object.
+    """
+    api_invoices = api_client.crm.commerce.invoices.basic_api
+    update = invoices_spoi(properties={"hs_invoice_status": INVOICE_STATUS_PAID})
+    response = api_invoices.update(invoice_id=invoice.id, simple_public_object_input=update)
+    # also update the status of the invoice object
+    invoice.status = INVOICE_STATUS_PAID
+    logger.info(
+        f"invoice {invoice.number}[{invoice.id}] was set to {INVOICE_STATUS_PAID} in HubSpot"
+    )
     return response

@@ -17,6 +17,15 @@ ACTION_ERROR = "error"
 
 
 def init_db():
+    """Open the local state database, creating the file and table when absent.
+
+    The database lives at <APPDATA>/hubspot-wefact.db, falling back to the
+    "data" directory relative to the working directory (which is what the
+    Docker image mounts). It stores one row per (invoice number, status) pair,
+    which is what makes a sync run idempotent.
+
+    Returns the open sqlite3 connection.
+    """
     data_path = os.getenv("APPDATA", "data")
 
     db_path = Path(data_path) / "hubspot-wefact.db"
@@ -27,16 +36,13 @@ def init_db():
     return connection
 
 
-def is_invoice_id_in_db(connection, invoice: Invoice):
-    cursor = connection.cursor()
-    cursor.execute(
-        "SELECT invoice_id, status FROM invoice_ids WHERE invoice_id=? AND status=?",
-        (invoice.number, invoice.status),
-    )
-    return cursor.fetchone() is not None
-
-
 def determine_db_status(connection, invoice):
+    """Return how far this invoice has already been processed.
+
+    An invoice accumulates one row per status it passed through, so the most
+    advanced one wins: paid before open before unknown. unknown means the
+    invoice has never been synced.
+    """
     cursor = connection.cursor()
     cursor.execute("SELECT invoice_id, status FROM invoice_ids WHERE invoice_id=?", (invoice.number,))
     statuses = [row[1] for row in cursor.fetchall()]
@@ -50,6 +56,11 @@ def determine_db_status(connection, invoice):
 
 
 def save_invoice_id_in_db(connection, invoice: Invoice):
+    """Record that this invoice was processed in its current status, and commit.
+
+    Inserting the same (number, status) pair twice violates the primary key and
+    raises sqlite3.IntegrityError.
+    """
     connection.execute(
         "INSERT INTO invoice_ids(invoice_id, status) VALUES(?,?)",
         (invoice.number, invoice.status),

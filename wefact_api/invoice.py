@@ -2,6 +2,7 @@ import base64
 from collections import namedtuple
 from enum import IntEnum
 
+from hubspot_api.api import logger
 from models.company import Company
 from models.invoice import Invoice
 from models.line_item import LineItem
@@ -12,10 +13,18 @@ from wefact_api.product import product_data_add_from_model, product_data_edit_fr
 WEFACT_STATUS_SUCCESS = "success"
 WEFACT_STATUS_ERROR = "error"
 
+WEFACT_STATUS_BETAALD = 4
+
+
+#: Outcome of a WeFact operation. persist tells main.py whether to record the
+#: invoice in the state database, data carries results such as the PDF bytes,
+#: and errors holds messages that block the sync.
 ResultType = namedtuple("result", ["persist", "data", "errors"], defaults=[False, {}, []])
 
 
 class InvoiceStatus(IntEnum):
+    """WeFact's numeric invoice statuses, as used in the Status field."""
+
     Concept = 0
     Verzonden = 2
     Deels_betaald = 3
@@ -25,20 +34,34 @@ class InvoiceStatus(IntEnum):
 
 
 def invoice_data_id(code):
+    """Return the WeFact payload that identifies an invoice by its invoice code."""
     return {"InvoiceCode": code}
 
 
 def invoice_data_id_from_model(invoice: Invoice):
+    """Identify the WeFact invoice for an Invoice; the HubSpot number is the invoice code."""
     return invoice_data_id(invoice.number)
 
 
 def invoice_data(code, debtor, invoice_date, term, discount, invoice_lines, custom_fields, country):
+    """Return the WeFact payload for creating an invoice.
+
+    The invoice is created as Verzonden (sent) rather than as a concept. term is
+    the payment term in days and invoice_date is formatted as YYYY-MM-DD.
+    """
     return {"InvoiceCode": code, "Status": int(InvoiceStatus.Verzonden), "DebtorCode": debtor,
             "Date": invoice_date.strftime("%Y-%m-%d"), "Term": term, "Discount": discount,
             "InvoiceLines": invoice_lines, "CustomFields": custom_fields, "Country": country}
 
 
 def invoice_data_from_model(invoice: Invoice, company: Company):
+    """Build the create-invoice payload from an Invoice and its Company.
+
+    The payment term is derived as the number of days between invoice date and
+    due date, the debtor code comes from the company's relatienummer, and the
+    Dutch invoice-level HubSpot fields are passed through as WeFact custom
+    fields (factuurbetreft, factuurreferentie, ...).
+    """
     invoice_lines = [invoice_line_data_from_model(line_item) for line_item in invoice.line_items]
     term = (invoice.due_date - invoice.invoice_date).days
     custom_fields = {
@@ -56,31 +79,63 @@ def invoice_data_from_model(invoice: Invoice, company: Company):
 
 
 def invoice_line_data(code, number, tax_percentage, discount_percentage, cost_center):
+    """Return one WeFact invoice line.
+
+    Discounts are always expressed per line ("line" type), never over the whole
+    invoice; the invoice-level Discount field is separate.
+    """
     return {"ProductCode": code, "Number": number, "TaxPercentage": tax_percentage, "DiscountPercentageType": "line",
             "DiscountPercentage": discount_percentage, "AccountingCostCentre": cost_center}
 
 
 def invoice_line_data_from_model(line_item: LineItem):
+    """Build one WeFact invoice line from a LineItem.
+
+    Price and description are not repeated here; WeFact takes those from the
+    product identified by the SKU, which generate_invoice creates or updates
+    first.
+    """
     return invoice_line_data(line_item.hs_sku, line_item.quantity, line_item.btw, line_item.hs_discount_percentage, line_item.kostenplaats)
 
 
-def invoice_update_paid(code):
+def get_invoice_status(code):
+    """Look up one invoice in WeFact by its invoice code.
+
+    Called for every invoice this sync already created, so main.py can see
+    whether WeFact has since marked it paid; invoice_is_paid reads the status
+    off the payload. When the invoice cannot be found, the WeFact errors are
+    returned instead and nothing is persisted.
+
+    Returns a ResultType whose data holds InvoiceCode and, on success, the
+    WeFact "show" payload under "invoice".
+    """
     result = ResultType(persist=False, data={}, errors=[])
     result.data["InvoiceCode"] = code
     result.data["Status"] = int(InvoiceStatus.Betaald)
     api_client_invoice = InvoiceClient()
     invoice_number = f"{code}"
     invoice = api_client_invoice.show(invoice_data_id(invoice_number))
-    download_result = api_client_invoice.download(invoice_data_id(invoice_number))
     if invoice["status"] == "success":
-        pdf = base64.b64decode(download_result["invoice"]["Base64"])
-        result.data["pdf"] = pdf
+        result.data["invoice"] = invoice["invoice"]
     else:
         result.errors.extend(invoice['errors'])
     return result
 
 
 def generate_invoice(invoice_object: Invoice, company_object: Company):
+    """Create a HubSpot invoice in WeFact, including its debtor and products.
+
+    The steps, in order:
+
+    1. Bail out if WeFact already has an invoice with this code. The result is
+       marked persist=True so the sync stops retrying it.
+    2. Create the debtor for the company, or update it when it already exists.
+    3. For every line item, create the product for its SKU or update it.
+    4. Add the invoice itself, then download its PDF.
+
+    Returns a ResultType; on success data["pdf"] holds the invoice PDF bytes,
+    otherwise errors holds the WeFact error messages.
+    """
     result = ResultType(persist=False, data={}, errors=[])
     api_client_invoice = InvoiceClient()
     invoice_number = f"{invoice_object.number}"
@@ -119,3 +174,30 @@ def generate_invoice(invoice_object: Invoice, company_object: Company):
         pdf = base64.b64decode(download_result["invoice"]["Base64"])
         result.data["pdf"] = pdf
     return result
+
+
+def invoice_is_paid(result):
+    """Return True only when the WeFact payload positively confirms a paid invoice.
+
+    result is the ResultType from get_invoice_status, which unwraps the WeFact
+    "show" response, so the invoice fields sit directly under
+    result.data["invoice"]. WeFact returns its fields as strings, so the status
+    is coerced to an int before comparing.
+
+    Anything unexpected - no payload, no Status field, an unparseable value -
+    returns False and is logged. Marking an unpaid invoice as paid corrupts the
+    bookkeeping in HubSpot, so the check fails closed.
+    """
+    wefact_invoice = result.data.get("invoice") or {}
+    raw_status = wefact_invoice.get("Status")
+    if raw_status is None:
+        logger.error("WeFact response holds no invoice status, leaving HubSpot untouched")
+        return False
+    try:
+        status = int(raw_status)
+    except (TypeError, ValueError):
+        logger.error(
+            f"WeFact returned an unreadable invoice Status {raw_status!r}, leaving HubSpot untouched"
+        )
+        return False
+    return status == WEFACT_STATUS_BETAALD
