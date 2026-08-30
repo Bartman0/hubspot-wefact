@@ -38,12 +38,23 @@ def _determine_action(db_status, invoice):
 
     db_status is what the state database has already recorded for this invoice
     number (open, paid or unknown); invoice.status is the current HubSpot status.
-    Returns one of ACTION_PROCESSED (nothing left to do), ACTION_PAID (mark the
-    existing WeFact invoice as paid), ACTION_OPEN (create the invoice in WeFact)
-    or ACTION_SKIP (a HubSpot status we do not sync, e.g. draft or voided).
+
+    Returns one of:
+
+    - ACTION_OPEN: never synced, so create the invoice in WeFact.
+    - ACTION_PROCESSED: created by an earlier run and still open on both sides,
+      so ask WeFact whether it has been paid since and carry that back to
+      HubSpot.
+    - ACTION_PAID: HubSpot reports paid while the database still has open,
+      which happens when someone marks an invoice paid in HubSpot by hand.
+      process_batch_of_invoices handles this alongside ACTION_SKIP, so it is a
+      no-op; see "The paid/open no-op" in the README.
+    - ACTION_SKIP: nothing to do, either because the invoice is settled on both
+      sides or because HubSpot reports a status we do not sync (draft, voided).
 
     Raises ValueError when the two statuses cannot occur together, which means
-    an invoice regressed from paid back to open.
+    an invoice regressed from paid back to open. Nothing catches it, so it ends
+    the run.
     """
     invoice_status = invoice.status
     # if the status of the invoice equals the db status, we already processed this phase
@@ -67,11 +78,14 @@ def _determine_action(db_status, invoice):
 def process_batch_of_invoices(api_client, connection, next_invoice):
     """Sync one HubSpot page of invoices to WeFact and return the next paging cursor.
 
-    For every invoice on the page: look up what has already been processed,
-    decide the action, fetch the associated company, contact and line items,
-    and then either create the invoice in WeFact or mark it paid. Successfully
-    handled invoices are recorded in the state database so a rerun skips them.
-    Invoices whose HubSpot details are incomplete get a HubSpot task instead.
+    For every invoice on the page: look up what has already been processed and
+    decide the action. An invoice that needs creating has its company, contact
+    and line items read from HubSpot first, is then built in WeFact and gets its
+    PDF attached back onto the company. An invoice an earlier run already created
+    is looked up in WeFact instead, and a payment found there is written back
+    onto the HubSpot invoice. Successfully handled invoices are recorded in the
+    state database so a rerun skips them. Invoices whose HubSpot details are
+    incomplete get a HubSpot task instead.
 
     next_invoice is the "after" cursor from the previous call (None for the
     first page); the return value is the cursor for the following page, or None
