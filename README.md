@@ -1,46 +1,85 @@
 # hubspot-wefact
 
-One-way synchronisation of invoices from **HubSpot** to **WeFact**.
+Synchronisation of invoices between **HubSpot** and **WeFact**. Invoices are
+created in WeFact from HubSpot; payment status travels back the other way.
 
 The tool reads invoices from the HubSpot CRM, creates the matching debtor,
 products and invoice in WeFact, downloads the resulting invoice PDF and attaches
-that PDF back to the HubSpot company as a note. A small SQLite database keeps
-track of what has already been done, so a run is safe to repeat.
+that PDF back to the HubSpot company as a note. For invoices it created on an
+earlier run it asks WeFact whether they have been paid, and marks them paid in
+HubSpot when they have. A small SQLite database keeps track of what has already
+been done, so a run is safe to repeat.
 
 ## How it works
 
 ```
-HubSpot invoices ──> state db check ──> WeFact (debtor, products, invoice)
-                                             │
-                                             └──> invoice PDF ──> HubSpot note on company
+                        ┌─ never synced ──> WeFact (debtor, products, invoice)
+                        │                            │
+HubSpot invoices ──> state db check                  └──> invoice PDF ──> HubSpot note
+                        │
+                        └─ created earlier ──> paid in WeFact? ──> HubSpot invoice set to paid
 ```
 
 For each invoice on a page of HubSpot results:
 
-1. **Look up progress.** `src/modules/state/db.py` reports what was already synced for this
-   invoice number: `unknown`, `open` or `paid`.
+1. **Look up progress.** `src/modules/state/db.py` reports what was already
+   synced for this invoice number: `unknown`, `open` or `paid`. An invoice keeps
+   one row per status it passed through and the most advanced one wins, so
+   `paid` beats `open` beats `unknown`.
+
 2. **Decide the action** (`_determine_action` in `src/main.py`):
 
-   | HubSpot status | state db | action                                                |
-   | -------------- | -------- | ----------------------------------------------------- |
-   | `open`         | unknown  | create the invoice in WeFact                          |
-   | `paid`         | unknown  | create the invoice in WeFact first                    |
-   | `paid`         | open     | fetch the paid invoice and its PDF                    |
-   | same as db     | –        | already processed, skip                               |
-   | anything else  | –        | not synced, skip (e.g. `draft`, `voided`)             |
+   | HubSpot status | state db | action                                                          |
+   | -------------- | -------- | --------------------------------------------------------------- |
+   | `open`         | unknown  | create it in WeFact                                              |
+   | `paid`         | unknown  | create it in WeFact                                              |
+   | `open`         | `open`   | ask WeFact whether it is paid and carry that back to HubSpot     |
+   | `paid`         | `open`   | nothing at all — see [the paid/open no-op](#the-paidopen-no-op)  |
+   | `paid`         | `paid`   | fully settled, skip                                              |
+   | anything else  | –        | not synced, skip (e.g. `draft`, `voided`)                        |
+   | `open`         | `paid`   | raises `ValueError` and aborts the run: an invoice cannot regress |
+
+### Creating the invoice in WeFact
 
 3. **Fetch the details.** The associated company, contact and line items are
    read from HubSpot. A line item without an `hs_sku` cannot be mapped onto a
-   WeFact product, so the invoice is skipped and a high-priority HubSpot **task**
-   is created on the company instead.
+   WeFact product, so the invoice is not sent and a high-priority HubSpot **task**
+   is created on the company instead. If the invoice has no associated company
+   the failure is only logged — a task needs a company to hang off.
 4. **Push to WeFact.** The debtor is created or updated, then every product, then
-   the invoice itself (created directly as *Verzonden*).
-5. **Attach the PDF.** The invoice PDF is uploaded to the HubSpot `/invoices`
-   folder and linked to the company through a note.
-6. **Record it.** The invoice number and status are written to the state
-   database, so the next run skips this phase.
+   the invoice itself (created directly as *Verzonden*). If WeFact already has an
+   invoice with this code nothing is created: the invoice is recorded as done and
+   step 5 is skipped, so no PDF is attached.
+5. **Attach the PDF.** The invoice PDF is downloaded from WeFact, uploaded to the
+   HubSpot `/invoices` folder and linked to the company through a note.
+6. **Record it.** The invoice number and its *current HubSpot status* are written
+   to the state database. That status is not always `open`: an invoice that
+   HubSpot already reported as `paid` the first time it was seen is recorded as
+   `paid`, so it is skipped from then on and its WeFact counterpart stays
+   *Verzonden*. When WeFact returns an error nothing is recorded and the next run
+   retries the invoice.
 
-Paging repeats this until HubSpot stops returning a cursor.
+### Carrying a payment back to HubSpot
+
+An invoice the state database holds as `open` and HubSpot still reports as `open`
+was created by an earlier run, so the sync asks WeFact for its current status.
+When WeFact reports it as paid (status `4`, *Betaald*), `hs_invoice_status` on the
+HubSpot invoice is set to `paid` and the invoice is recorded as `paid` in the
+state database.
+
+Anything else leaves HubSpot untouched: a failed lookup, a missing `Status` field
+or a value that will not parse all count as not paid. The check fails closed,
+because marking an unpaid invoice as paid corrupts the bookkeeping in HubSpot.
+
+### The paid/open no-op
+
+An invoice the state database holds as `open` while HubSpot already reports
+`paid` — someone marked it paid in HubSpot by hand — is skipped entirely.
+`_determine_action` returns `ACTION_PAID`, but `process_batch_of_invoices`
+handles that case alongside `ACTION_SKIP`, so there is no WeFact lookup, no PDF
+and no update. The invoice stays in this state on every subsequent run.
+
+Paging repeats all of this until HubSpot stops returning a cursor.
 
 ## Layout
 
