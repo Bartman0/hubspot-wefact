@@ -53,6 +53,8 @@ def determine_db_status(connection, invoice):
         status = INVOICE_STATUS_OPEN
     if INVOICE_STATUS_PAID in statuses:
         status = INVOICE_STATUS_PAID
+    if INVOICE_STATUS_VOIDED in statuses:
+        status = INVOICE_STATUS_VOIDED
     return status
 
 

@@ -47,7 +47,8 @@ def _determine_action(db_status, invoice):
     """Decide what to do with one invoice by comparing HubSpot and state db status.
 
     db_status is what the state database has already recorded for this invoice
-    number (open, paid or unknown); invoice.status is the current HubSpot status.
+    number (open, paid, voided or unknown); invoice.status is the current HubSpot
+    status.
 
     Returns one of:
 
@@ -67,6 +68,12 @@ def _determine_action(db_status, invoice):
     the run.
     """
     invoice_status = invoice.status
+    # a voided invoice is final: whatever HubSpot reports now, there is nothing
+    # left to sync. Without this the pairwise checks below fall through to the
+    # ValueError for an invoice voided here and since reopened or paid in
+    # HubSpot, which would end the whole run over one stale invoice.
+    if db_status == INVOICE_STATUS_VOIDED:
+        return ACTION_SKIP
     # if the status of the invoice equals the db status, we already processed this phase
     if invoice_status == INVOICE_STATUS_OPEN and db_status == INVOICE_STATUS_OPEN:
         return ACTION_PROCESSED
