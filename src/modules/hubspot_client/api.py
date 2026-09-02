@@ -15,7 +15,6 @@ from modules.models.company import Company
 from modules.models.contact import Contact
 from modules.models.invoice import Invoice
 from modules.models.line_item import LineItem
-from modules.state.db import INVOICE_STATUS_PAID
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -355,25 +354,25 @@ def create_note(api_client, company_id, title, file_id):
 
 
 
-def set_invoice_to_paid(api_client, invoice):
-    """Push a paid status from WeFact back onto the HubSpot invoice.
+def set_invoice_status(api_client, invoice, status):
+    """Write a status from WeFact back onto the HubSpot invoice.
 
-    Called for invoices this sync already created in WeFact, to carry the
-    payment the other way: WeFact owns whether an invoice was settled, HubSpot
-    needs to reflect it.
+    Called for invoices this sync created on an earlier run, to carry the
+    outcome the other way: WeFact owns what happened to an invoice after it was
+    sent - settled, expired - and HubSpot has to reflect it.
 
-    Whether the invoice really is paid is decided by the caller: main.py looks
-    the invoice up with get_invoice_status and only lands here once
-    modules.wefact_client.invoice.invoice_is_paid confirmed it. This unconditionally sets
-    hs_invoice_status to paid, updates invoice.status to match and returns the
-    updated HubSpot object.
+    Which status applies is decided by the caller: main.py looks the invoice up
+    with get_invoice_status and translates the WeFact status through
+    WEFACT_STATUS_TO_HUBSPOT. This unconditionally sets hs_invoice_status to
+    status, updates invoice.status to match and returns the updated HubSpot
+    object.
     """
     api_invoices = api_client.crm.commerce.invoices.basic_api
-    update = invoices_spoi(properties={"hs_invoice_status": INVOICE_STATUS_PAID})
+    update = invoices_spoi(properties={"hs_invoice_status": status})
     response = api_invoices.update(invoice_id=invoice.id, simple_public_object_input=update)
     # also update the status of the invoice object
-    invoice.status = INVOICE_STATUS_PAID
+    invoice.status = status
     logger.info(
-        f"invoice {invoice.number}[{invoice.id}] was set to {INVOICE_STATUS_PAID} in HubSpot"
+        f"invoice {invoice.number}[{invoice.id}] was set to {status} in HubSpot"
     )
     return response

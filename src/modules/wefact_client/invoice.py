@@ -14,7 +14,7 @@ WEFACT_STATUS_SUCCESS = "success"
 WEFACT_STATUS_ERROR = "error"
 
 WEFACT_STATUS_BETAALD = 4
-
+WEFACT_STATUS_VERVALLEN = 9
 
 #: Outcome of a WeFact operation. persist tells main.py whether to record the
 #: invoice in the state database, data carries results such as the PDF bytes,
@@ -101,9 +101,9 @@ def invoice_line_data_from_model(line_item: LineItem):
 def get_invoice_status(code):
     """Look up one invoice in WeFact by its invoice code.
 
-    Called for every invoice this sync already created, so main.py can see
-    whether WeFact has since marked it paid; invoice_is_paid reads the status
-    off the payload. When the invoice cannot be found, the WeFact errors are
+    Called for every invoice this sync already created, so main.py can see what
+    WeFact has done with it since; wefact_invoice_status reads the status off
+    the payload. When the invoice cannot be found, the WeFact errors are
     returned instead and nothing is persisted.
 
     Returns a ResultType whose data holds InvoiceCode and, on success, the
@@ -176,28 +176,30 @@ def generate_invoice(invoice_object: Invoice, company_object: Company):
     return result
 
 
-def invoice_is_paid(result):
-    """Return True only when the WeFact payload positively confirms a paid invoice.
+def wefact_invoice_status(result):
+    """Return the WeFact invoice status as an int, or None when it cannot be read.
 
     result is the ResultType from get_invoice_status, which unwraps the WeFact
     "show" response, so the invoice fields sit directly under
     result.data["invoice"]. WeFact returns its fields as strings, so the status
-    is coerced to an int before comparing.
+    is coerced to an int; compare the result against WEFACT_STATUS_BETAALD,
+    WEFACT_STATUS_VERVALLEN or another InvoiceStatus member.
 
     Anything unexpected - no payload, no Status field, an unparseable value -
-    returns False and is logged. Marking an unpaid invoice as paid corrupts the
-    bookkeeping in HubSpot, so the check fails closed.
+    returns None and is logged, so the caller cannot mistake it for a real
+    status. Writing the wrong status back corrupts the bookkeeping in HubSpot,
+    so the check fails closed.
     """
     wefact_invoice = result.data.get("invoice") or {}
     raw_status = wefact_invoice.get("Status")
     if raw_status is None:
         logger.error("WeFact response holds no invoice status, leaving HubSpot untouched")
-        return False
+        return None
     try:
         status = int(raw_status)
     except (TypeError, ValueError):
         logger.error(
             f"WeFact returned an unreadable invoice Status {raw_status!r}, leaving HubSpot untouched"
         )
-        return False
-    return status == WEFACT_STATUS_BETAALD
+        return None
+    return status

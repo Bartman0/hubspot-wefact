@@ -3,12 +3,22 @@ import logging
 from dotenv import load_dotenv
 
 from modules.hubspot_client.api import get_api_client, get_invoices, get_invoice_details, create_task, upload_invoice, \
-    associate_file_to_company, set_invoice_to_paid
+    associate_file_to_company, set_invoice_status
 from modules.state.db import init_db, save_invoice_id_in_db, determine_db_status, INVOICE_STATUS_OPEN, INVOICE_STATUS_PAID, \
-    INVOICE_STATUS_UNKNOWN, ACTION_OPEN, ACTION_PAID, ACTION_PROCESSED, ACTION_SKIP
-from modules.wefact_client.invoice import generate_invoice, get_invoice_status, invoice_is_paid
+    INVOICE_STATUS_VOIDED, INVOICE_STATUS_UNKNOWN, ACTION_OPEN, ACTION_PAID, ACTION_PROCESSED, ACTION_SKIP
+from modules.wefact_client.invoice import generate_invoice, get_invoice_status, wefact_invoice_status, \
+    WEFACT_STATUS_BETAALD, WEFACT_STATUS_VERVALLEN
 
 load_dotenv()
+
+#: How a WeFact status translates to the HubSpot invoice status written back by
+#: set_invoice_status. main.py is the only module that knows both vocabularies:
+#: hubspot_client does not learn WeFact's numbers and wefact_client does not
+#: learn HubSpot's strings. A WeFact status that is absent here is left alone.
+WEFACT_STATUS_TO_HUBSPOT = {
+    WEFACT_STATUS_BETAALD: INVOICE_STATUS_PAID,
+    WEFACT_STATUS_VERVALLEN: INVOICE_STATUS_VOIDED,
+}
 
 logging.basicConfig(level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(message)s",
@@ -43,8 +53,8 @@ def _determine_action(db_status, invoice):
 
     - ACTION_OPEN: never synced, so create the invoice in WeFact.
     - ACTION_PROCESSED: created by an earlier run and still open on both sides,
-      so ask WeFact whether it has been paid since and carry that back to
-      HubSpot.
+      so ask WeFact what has happened to it since and carry that back to HubSpot
+      through WEFACT_STATUS_TO_HUBSPOT.
     - ACTION_PAID: HubSpot reports paid while the database still has open,
       which happens when someone marks an invoice paid in HubSpot by hand.
       process_batch_of_invoices handles this alongside ACTION_SKIP, so it is a
@@ -82,8 +92,8 @@ def process_batch_of_invoices(api_client, connection, next_invoice):
     decide the action. An invoice that needs creating has its company, contact
     and line items read from HubSpot first, is then built in WeFact and gets its
     PDF attached back onto the company. An invoice an earlier run already created
-    is looked up in WeFact instead, and a payment found there is written back
-    onto the HubSpot invoice. Successfully handled invoices are recorded in the
+    is looked up in WeFact instead, and a status found there is written back onto
+    the HubSpot invoice. Successfully handled invoices are recorded in the
     state database so a rerun skips them. Invoices whose HubSpot details are
     incomplete get a HubSpot task instead.
 
@@ -107,8 +117,9 @@ def process_batch_of_invoices(api_client, connection, next_invoice):
                     f"invoice {invoice.number}[{invoice.id}] with status {invoice.status} could not be retrieved from WeFact")
                 logger.error(f"error: {result.errors}")
                 continue
-            if invoice_is_paid(result):
-                set_invoice_to_paid(api_client, invoice)
+            hubspot_status = WEFACT_STATUS_TO_HUBSPOT.get(wefact_invoice_status(result))
+            if hubspot_status is not None:
+                set_invoice_status(api_client, invoice, hubspot_status)
                 save_invoice_id_in_db(connection, invoice)
             continue
         # from here on only invoices that need to be created remain
