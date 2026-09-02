@@ -2,11 +2,11 @@ import logging
 
 from dotenv import load_dotenv
 
-from hubspot_api.api import get_api_client, get_invoices, get_invoice_details, create_task, upload_invoice, \
+from modules.hubspot_client.api import get_api_client, get_invoices, get_invoice_details, create_task, upload_invoice, \
     associate_file_to_company, set_invoice_to_paid
-from state.db import init_db, save_invoice_id_in_db, determine_db_status, INVOICE_STATUS_OPEN, INVOICE_STATUS_PAID, \
+from modules.state.db import init_db, save_invoice_id_in_db, determine_db_status, INVOICE_STATUS_OPEN, INVOICE_STATUS_PAID, \
     INVOICE_STATUS_UNKNOWN, ACTION_OPEN, ACTION_PAID, ACTION_PROCESSED, ACTION_SKIP
-from wefact_api.invoice import generate_invoice, get_invoice_status, invoice_is_paid
+from modules.wefact_client.invoice import generate_invoice, get_invoice_status, invoice_is_paid
 
 load_dotenv()
 

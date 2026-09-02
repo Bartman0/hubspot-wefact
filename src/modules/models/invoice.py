@@ -2,7 +2,7 @@ from datetime import date
 
 from pydantic import BaseModel, Field
 
-from models.line_item import LineItem
+from modules.models.line_item import LineItem
 
 
 class Invoice(BaseModel):

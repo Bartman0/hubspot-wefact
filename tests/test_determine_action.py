@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from main import _determine_action
-from state.db import (
+from modules.state.db import (
     ACTION_OPEN,
     ACTION_PAID,
     ACTION_PROCESSED,

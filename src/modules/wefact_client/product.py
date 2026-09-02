@@ -1,4 +1,4 @@
-from models.line_item import LineItem
+from modules.models.line_item import LineItem
 
 
 def product_data_id(code):

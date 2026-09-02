@@ -11,11 +11,11 @@ from hubspot.crm.objects.notes import SimplePublicObjectInputForCreate as notes_
 from hubspot.crm.objects.tasks import SimplePublicObjectInputForCreate as tasks_spoifc
 from urllib3 import Retry
 
-from models.company import Company
-from models.contact import Contact
-from models.invoice import Invoice
-from models.line_item import LineItem
-from state.db import INVOICE_STATUS_PAID
+from modules.models.company import Company
+from modules.models.contact import Contact
+from modules.models.invoice import Invoice
+from modules.models.line_item import LineItem
+from modules.state.db import INVOICE_STATUS_PAID
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -364,7 +364,7 @@ def set_invoice_to_paid(api_client, invoice):
 
     Whether the invoice really is paid is decided by the caller: main.py looks
     the invoice up with get_invoice_status and only lands here once
-    wefact_api.invoice.invoice_is_paid confirmed it. This unconditionally sets
+    modules.wefact_client.invoice.invoice_is_paid confirmed it. This unconditionally sets
     hs_invoice_status to paid, updates invoice.status to match and returns the
     updated HubSpot object.
     """

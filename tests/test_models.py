@@ -3,10 +3,10 @@ from datetime import date
 import pytest
 from pydantic import ValidationError
 
-from models.company import Company
-from models.contact import Contact
-from models.invoice import Invoice
-from models.line_item import LineItem
+from modules.models.company import Company
+from modules.models.contact import Contact
+from modules.models.invoice import Invoice
+from modules.models.line_item import LineItem
 
 
 class TestInvoice:

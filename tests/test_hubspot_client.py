@@ -2,9 +2,9 @@ from datetime import date
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from hubspot_api import api
-from hubspot_api.api import _read_first_association_id, set_invoice_to_paid
-from models.invoice import Invoice
+from modules.hubspot_client import api
+from modules.hubspot_client.api import _read_first_association_id, set_invoice_to_paid
+from modules.models.invoice import Invoice
 
 
 def make_page(results, after=None):
@@ -277,7 +277,7 @@ class TestSetInvoiceToPaid:
     """Pushing a paid status from WeFact back onto the HubSpot invoice.
 
     Whether the invoice is actually paid is decided upstream by
-    wefact_api.invoice.invoice_is_paid (see TestInvoiceIsPaid in
+    modules.wefact_client.invoice.invoice_is_paid (see TestInvoiceIsPaid in
     test_wefact_builders.py); main.py only calls this once that returned True,
     so these tests cover the update itself.
     """

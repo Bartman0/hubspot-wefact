@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from state.db import (
+from modules.state.db import (
     INVOICE_STATUS_OPEN,
     INVOICE_STATUS_PAID,
     INVOICE_STATUS_UNKNOWN,

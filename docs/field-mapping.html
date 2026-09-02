@@ -228,14 +228,14 @@ flowchart LR
 
 <h2>1. Invoice</h2>
 
-<p>HubSpot invoice object (<code>get_invoices</code> / <code>hubspot_api/api.py:70</code>) → <code>Invoice</code> model
-(<code>models/invoice.py</code>) → WeFact invoice (<code>invoice_data_from_model</code> / <code>wefact_api/invoice.py:41</code>).</p>
+<p>HubSpot invoice object (<code>get_invoices</code> / <code>src/modules/hubspot_client/api.py:70</code>) → <code>Invoice</code> model
+(<code>src/modules/models/invoice.py</code>) → WeFact invoice (<code>invoice_data_from_model</code> / <code>src/modules/wefact_client/invoice.py:41</code>).</p>
 
 <table>
 <thead><tr><th>HubSpot property</th><th>Invoice field</th><th>WeFact field</th><th>Notes</th></tr></thead>
 <tbody>
 <tr><td><code>hs_number</code></td><td><code>number</code></td><td><code>InvoiceCode</code></td><td></td></tr>
-<tr><td><code>hs_invoice_status</code></td><td><code>status</code></td><td>—</td><td>drives sync state (<code>state/db.py</code>), not sent; WeFact <code>Status</code> hardcoded to <code>Verzonden</code></td></tr>
+<tr><td><code>hs_invoice_status</code></td><td><code>status</code></td><td>—</td><td>drives sync state (<code>src/modules/state/db.py</code>), not sent; WeFact <code>Status</code> hardcoded to <code>Verzonden</code></td></tr>
 <tr><td><code>hs_amount_billed</code></td><td><code>amount_billed</code></td><td>—</td><td>fetched, not sent</td></tr>
 <tr><td><code>hs_invoice_date</code></td><td><code>invoice_date</code></td><td><code>Date</code></td><td></td></tr>
 <tr><td><code>hs_due_date</code></td><td><code>due_date</code></td><td>—</td><td>combined with <code>invoice_date</code> → <code>Term</code> = <code>(due_date − invoice_date).days</code></td></tr>
@@ -253,17 +253,17 @@ flowchart LR
 </tbody>
 </table>
 
-<p>WeFact <code>DebtorCode</code> comes from <code>company.relatienummer</code> (<code>wefact_api/invoice.py:55</code>), not the invoice.</p>
+<p>WeFact <code>DebtorCode</code> comes from <code>company.relatienummer</code> (<code>src/modules/wefact_client/invoice.py:55</code>), not the invoice.</p>
 
 <h2>2. Company → Debtor</h2>
 
-<p>HubSpot company (<code>_fetch_company</code> / <code>hubspot_api/api.py:159</code>) → <code>Company</code> model
-(<code>models/company.py</code>) → WeFact debtor (<code>wefact_api/debtor.py</code>).</p>
+<p>HubSpot company (<code>_fetch_company</code> / <code>src/modules/hubspot_client/api.py:159</code>) → <code>Company</code> model
+(<code>src/modules/models/company.py</code>) → WeFact debtor (<code>src/modules/wefact_client/debtor.py</code>).</p>
 
 <table>
 <thead><tr><th>HubSpot property</th><th>Company field</th><th>WeFact field</th><th>Notes</th></tr></thead>
 <tbody>
-<tr><td><code>relatie_nummer</code></td><td><code>relatienummer</code></td><td><code>DebtorCode</code></td><td>falls back to <code>company_id</code> if empty (<code>hubspot_api/api.py:170</code>)</td></tr>
+<tr><td><code>relatie_nummer</code></td><td><code>relatienummer</code></td><td><code>DebtorCode</code></td><td>falls back to <code>company_id</code> if empty (<code>src/modules/hubspot_client/api.py:170</code>)</td></tr>
 <tr><td><code>name</code></td><td><code>name</code></td><td><code>CompanyName</code></td><td></td></tr>
 <tr><td><code>address</code></td><td><code>address</code></td><td><code>Address</code></td><td></td></tr>
 <tr><td><code>zip</code></td><td><code>zip</code></td><td><code>ZipCode</code></td><td></td></tr>
@@ -276,9 +276,9 @@ flowchart LR
 
 <h2>3. Line item → Product + Invoice line</h2>
 
-<p>HubSpot line_item (<code>_fetch_line_items</code> / <code>hubspot_api/api.py:202</code>) → <code>LineItem</code> model
-(<code>models/line_item.py</code>) → WeFact product (<code>wefact_api/product.py</code>) and invoice line
-(<code>wefact_api/invoice.py:63</code>).</p>
+<p>HubSpot line_item (<code>_fetch_line_items</code> / <code>src/modules/hubspot_client/api.py:202</code>) → <code>LineItem</code> model
+(<code>src/modules/models/line_item.py</code>) → WeFact product (<code>src/modules/wefact_client/product.py</code>) and invoice line
+(<code>src/modules/wefact_client/invoice.py:63</code>).</p>
 
 <table>
 <thead><tr><th>HubSpot property</th><th>LineItem field</th><th>WeFact field</th><th>Notes</th></tr></thead>
@@ -297,7 +297,7 @@ flowchart LR
 
 <h2>4. Contact</h2>
 
-<p><code>Contact</code> (<code>_fetch_contact</code> / <code>hubspot_api/api.py:174</code>) is fetched (<code>lastname</code>,
+<p><code>Contact</code> (<code>_fetch_contact</code> / <code>src/modules/hubspot_client/api.py:174</code>) is fetched (<code>lastname</code>,
 <code>factuur_toelichting</code>) and returned from <code>get_invoice_details</code>, but is <strong>never mapped to any
 WeFact object</strong> in the current code.</p>
 
