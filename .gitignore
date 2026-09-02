@@ -17,8 +17,6 @@ wheels/
 
 *.pdf
 
-*.pkg
-
 data/
 
 .docker-build-stamp

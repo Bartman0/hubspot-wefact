@@ -1,2 +1,0 @@
-cd ~/Applications/Hubspot-Wefact
-./start.sh

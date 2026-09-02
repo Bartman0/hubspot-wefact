@@ -7,6 +7,7 @@ from modules.models.invoice import Invoice
 
 INVOICE_STATUS_OPEN = "open"
 INVOICE_STATUS_PAID = "paid"
+INVOICE_STATUS_VOIDED = "voided"
 INVOICE_STATUS_UNKNOWN = "unknown"
 
 ACTION_OPEN = INVOICE_STATUS_OPEN
@@ -52,6 +53,8 @@ def determine_db_status(connection, invoice):
         status = INVOICE_STATUS_OPEN
     if INVOICE_STATUS_PAID in statuses:
         status = INVOICE_STATUS_PAID
+    if INVOICE_STATUS_VOIDED in statuses:
+        status = INVOICE_STATUS_VOIDED
     return status
 
 

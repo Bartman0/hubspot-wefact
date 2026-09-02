@@ -6,6 +6,7 @@ from modules.state.db import (
     INVOICE_STATUS_OPEN,
     INVOICE_STATUS_PAID,
     INVOICE_STATUS_UNKNOWN,
+    INVOICE_STATUS_VOIDED,
     determine_db_status,
     save_invoice_id_in_db,
 )
@@ -59,6 +60,35 @@ def test_paid_takes_precedence_over_open(connection):
     save_invoice_id_in_db(connection, make_invoice(status=INVOICE_STATUS_OPEN))
     save_invoice_id_in_db(connection, make_invoice(status=INVOICE_STATUS_PAID))
     assert determine_db_status(connection, make_invoice()) == INVOICE_STATUS_PAID
+
+
+def test_voided_when_only_voided_row_present(connection):
+    """A single voided row reports voided."""
+    save_invoice_id_in_db(connection, make_invoice(status=INVOICE_STATUS_VOIDED))
+    assert determine_db_status(connection, make_invoice()) == INVOICE_STATUS_VOIDED
+
+
+def test_voided_takes_precedence_over_open(connection):
+    """An invoice that went open -> voided reports voided, not open.
+
+    This is what makes the voided row readable at all: before the rule existed
+    determine_db_status ignored it and kept reporting open.
+    """
+    save_invoice_id_in_db(connection, make_invoice(status=INVOICE_STATUS_OPEN))
+    save_invoice_id_in_db(connection, make_invoice(status=INVOICE_STATUS_VOIDED))
+    assert determine_db_status(connection, make_invoice()) == INVOICE_STATUS_VOIDED
+
+
+def test_voided_takes_precedence_over_paid(connection):
+    """With both rows recorded, voided wins.
+
+    The sync cannot produce this combination today - a paid row means the
+    invoice is skipped from then on, so no voided row can follow - but the
+    ordering is asserted here so a change to it is a deliberate one.
+    """
+    save_invoice_id_in_db(connection, make_invoice(status=INVOICE_STATUS_PAID))
+    save_invoice_id_in_db(connection, make_invoice(status=INVOICE_STATUS_VOIDED))
+    assert determine_db_status(connection, make_invoice()) == INVOICE_STATUS_VOIDED
 
 
 def test_status_is_scoped_to_the_requested_invoice(connection):
