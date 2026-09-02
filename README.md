@@ -1,14 +1,15 @@
 # hubspot-wefact
 
 Synchronisation of invoices between **HubSpot** and **WeFact**. Invoices are
-created in WeFact from HubSpot; payment status travels back the other way.
+created in WeFact from HubSpot; what WeFact then makes of them — paid, expired —
+travels back the other way.
 
 The tool reads invoices from the HubSpot CRM, creates the matching debtor,
 products and invoice in WeFact, downloads the resulting invoice PDF and attaches
 that PDF back to the HubSpot company as a note. For invoices it created on an
-earlier run it asks WeFact whether they have been paid, and marks them paid in
-HubSpot when they have. A small SQLite database keeps track of what has already
-been done, so a run is safe to repeat.
+earlier run it asks WeFact what has happened to them since, and updates the
+HubSpot invoice status to match. A small SQLite database keeps track of what has
+already been done, so a run is safe to repeat.
 
 ## How it works
 
@@ -17,7 +18,7 @@ been done, so a run is safe to repeat.
                         │                            │
 HubSpot invoices ──> state db check                  └──> invoice PDF ──> HubSpot note
                         │
-                        └─ created earlier ──> paid in WeFact? ──> HubSpot invoice set to paid
+                        └─ created earlier ──> status in WeFact? ──> HubSpot invoice status
 ```
 
 For each invoice on a page of HubSpot results:
@@ -33,7 +34,7 @@ For each invoice on a page of HubSpot results:
    | -------------- | -------- | --------------------------------------------------------------- |
    | `open`         | unknown  | create it in WeFact                                              |
    | `paid`         | unknown  | create it in WeFact                                              |
-   | `open`         | `open`   | ask WeFact whether it is paid and carry that back to HubSpot     |
+   | `open`         | `open`   | ask WeFact what happened to it and carry that back to HubSpot    |
    | `paid`         | `open`   | nothing at all — see [the paid/open no-op](#the-paidopen-no-op)  |
    | `paid`         | `paid`   | fully settled, skip                                              |
    | anything else  | –        | not synced, skip (e.g. `draft`, `voided`)                        |
@@ -59,17 +60,32 @@ For each invoice on a page of HubSpot results:
    *Verzonden*. When WeFact returns an error nothing is recorded and the next run
    retries the invoice.
 
-### Carrying a payment back to HubSpot
+### Carrying the WeFact outcome back to HubSpot
 
 An invoice the state database holds as `open` and HubSpot still reports as `open`
-was created by an earlier run, so the sync asks WeFact for its current status.
-When WeFact reports it as paid (status `4`, *Betaald*), `hs_invoice_status` on the
-HubSpot invoice is set to `paid` and the invoice is recorded as `paid` in the
-state database.
+was created by an earlier run, so the sync asks WeFact what has happened to it
+since. WeFact's status is translated through `WEFACT_STATUS_TO_HUBSPOT` in
+`src/main.py`, and a match is written onto `hs_invoice_status` and recorded in
+the state database:
 
-Anything else leaves HubSpot untouched: a failed lookup, a missing `Status` field
-or a value that will not parse all count as not paid. The check fails closed,
-because marking an unpaid invoice as paid corrupts the bookkeeping in HubSpot.
+| WeFact status      | HubSpot status |
+| ------------------ | -------------- |
+| `4` (*Betaald*)    | `paid`         |
+| `9` (*Vervallen*)  | `voided`       |
+
+Anything else leaves HubSpot untouched: a status with no entry in that table
+(concept, sent, partly paid, credit invoice), a failed lookup, a missing `Status`
+field, or a value that will not parse — `wefact_invoice_status` returns `None`
+for the last two, which misses the table as well. The check fails closed, because
+writing the wrong status back corrupts the bookkeeping in HubSpot.
+
+Adding another status is a single entry in `WEFACT_STATUS_TO_HUBSPOT`; the write
+itself is `set_invoice_status`, which takes the HubSpot status as an argument.
+
+The state database row written here carries the new HubSpot status, so a `voided`
+row can end up in it. `determine_db_status` only looks for `open` and `paid`, so
+such a row is never read back; the invoice is skipped on later runs because
+HubSpot reports `voided`, which is not a status the sync handles.
 
 ### The paid/open no-op
 

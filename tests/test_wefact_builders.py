@@ -5,15 +5,17 @@ from modules.models.invoice import Invoice
 from modules.models.line_item import LineItem
 from modules.wefact_client import debtor, product
 from modules.wefact_client.invoice import (
+    WEFACT_STATUS_BETAALD,
+    WEFACT_STATUS_VERVALLEN,
     InvoiceStatus,
     ResultType,
     invoice_data,
     invoice_data_from_model,
     invoice_data_id,
     invoice_data_id_from_model,
-    invoice_is_paid,
     invoice_line_data,
     invoice_line_data_from_model,
+    wefact_invoice_status,
 )
 
 
@@ -224,7 +226,7 @@ class TestInvoiceBuilders:
         assert [line["ProductCode"] for line in result["InvoiceLines"]] == ["A", "B"]
 
 
-def paid_status_result(**invoice_fields):
+def status_result(**invoice_fields):
     """Wrap WeFact invoice fields the way get_invoice_status returns them.
 
     get_invoice_status stores the "show" payload's own invoice dict, so the
@@ -233,38 +235,39 @@ def paid_status_result(**invoice_fields):
     return ResultType(persist=False, data={"invoice": invoice_fields}, errors=[])
 
 
-class TestInvoiceIsPaid:
-    """The gate main.py uses before pushing a paid status back to HubSpot.
+class TestWefactInvoiceStatus:
+    """Reading the WeFact status off a get_invoice_status result.
 
-    Marking an unpaid invoice as paid corrupts the bookkeeping in HubSpot, so
-    everything unexpected must fail closed here rather than downstream.
+    main.py translates whatever comes back through WEFACT_STATUS_TO_HUBSPOT, so
+    anything unreadable has to return None rather than a number that could be
+    mistaken for a real status and written into HubSpot.
     """
 
-    def test_fully_paid_invoice_is_paid(self):
-        """WeFact status 4 (Betaald) is the only paid status."""
-        assert invoice_is_paid(paid_status_result(Status="4")) is True
+    def test_paid_status_is_returned(self):
+        """WeFact status 4 is Betaald."""
+        assert wefact_invoice_status(status_result(Status="4")) == WEFACT_STATUS_BETAALD
+
+    def test_expired_status_is_returned(self):
+        """WeFact status 9 is Vervallen."""
+        assert wefact_invoice_status(status_result(Status="9")) == WEFACT_STATUS_VERVALLEN
 
     def test_status_is_accepted_as_int_as_well_as_string(self):
         """WeFact normally returns strings, but an int status works too."""
-        assert invoice_is_paid(paid_status_result(Status=4)) is True
+        assert wefact_invoice_status(status_result(Status=4)) == WEFACT_STATUS_BETAALD
 
-    def test_partly_paid_invoice_is_not_paid(self):
-        """Status 3 (Deels_betaald) is not fully paid."""
-        assert invoice_is_paid(paid_status_result(Status="3")) is False
-
-    def test_unpaid_statuses_are_not_paid(self):
-        """A concept, sent, credited or expired invoice never counts as paid."""
-        for status in ("0", "2", "8", "9"):
-            assert invoice_is_paid(paid_status_result(Status=status)) is False
+    def test_other_statuses_are_returned_as_themselves(self):
+        """Concept, sent, partly paid and credited come back unchanged."""
+        for raw in ("0", "2", "3", "8"):
+            assert wefact_invoice_status(status_result(Status=raw)) == int(raw)
 
     def test_missing_status_field_fails_closed(self):
-        """A WeFact payload without a Status must not be read as paid."""
-        assert invoice_is_paid(paid_status_result()) is False
+        """A WeFact payload without a Status yields None, not a status."""
+        assert wefact_invoice_status(status_result()) is None
 
     def test_unparseable_status_fails_closed(self):
-        """A non-numeric Status is a WeFact contract change, not a paid invoice."""
-        assert invoice_is_paid(paid_status_result(Status="onbekend")) is False
+        """A non-numeric Status is a WeFact contract change, not a status."""
+        assert wefact_invoice_status(status_result(Status="onbekend")) is None
 
     def test_missing_invoice_payload_fails_closed(self):
-        """A result that never got a WeFact payload is not paid."""
-        assert invoice_is_paid(ResultType(persist=False, data={}, errors=[])) is False
+        """A result that never got a WeFact payload yields None."""
+        assert wefact_invoice_status(ResultType(persist=False, data={}, errors=[])) is None

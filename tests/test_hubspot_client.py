@@ -2,8 +2,10 @@ from datetime import date
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from modules.hubspot_client import api
-from modules.hubspot_client.api import _read_first_association_id, set_invoice_to_paid
+from modules.hubspot_client.api import _read_first_association_id, set_invoice_status
 from modules.models.invoice import Invoice
 
 
@@ -273,36 +275,38 @@ def _updated_properties(api_client):
     return update.call_args.kwargs["simple_public_object_input"].properties
 
 
-class TestSetInvoiceToPaid:
-    """Pushing a paid status from WeFact back onto the HubSpot invoice.
+class TestSetInvoiceStatus:
+    """Writing a status from WeFact back onto the HubSpot invoice.
 
-    Whether the invoice is actually paid is decided upstream by
-    modules.wefact_client.invoice.invoice_is_paid (see TestInvoiceIsPaid in
-    test_wefact_builders.py); main.py only calls this once that returned True,
-    so these tests cover the update itself.
+    Which status applies is decided upstream: main.py reads the WeFact status
+    with wefact_invoice_status and translates it through
+    WEFACT_STATUS_TO_HUBSPOT (see TestWefactStatusToHubspot in
+    test_status_writeback.py), so these tests cover the update itself.
     """
 
-    def test_invoice_is_set_to_paid_in_hubspot(self):
-        """The HubSpot invoice named by its id gets hs_invoice_status paid."""
+    @pytest.mark.parametrize("status", ["paid", "voided"])
+    def test_invoice_status_is_written_to_hubspot(self, status):
+        """The HubSpot invoice named by its id gets the status it was given."""
         api_client = MagicMock()
 
-        set_invoice_to_paid(api_client, _invoice())
+        set_invoice_status(api_client, _invoice(), status)
 
-        assert _updated_properties(api_client) == {"hs_invoice_status": "paid"}
+        assert _updated_properties(api_client) == {"hs_invoice_status": status}
         assert api_client.crm.commerce.invoices.basic_api.update.call_args.kwargs["invoice_id"] == "inv-1"
 
-    def test_local_invoice_status_is_updated_too(self):
+    @pytest.mark.parametrize("status", ["paid", "voided"])
+    def test_local_invoice_status_is_updated_too(self, status):
         """The in-memory Invoice reflects the new status without a HubSpot reread."""
         invoice = _invoice()
 
-        set_invoice_to_paid(MagicMock(), invoice)
+        set_invoice_status(MagicMock(), invoice, status)
 
-        assert invoice.status == "paid"
+        assert invoice.status == status
 
     def test_hubspot_response_is_returned(self):
         """The caller gets the updated HubSpot object back."""
         api_client = MagicMock()
 
-        response = set_invoice_to_paid(api_client, _invoice())
+        response = set_invoice_status(api_client, _invoice(), "paid")
 
         assert response is api_client.crm.commerce.invoices.basic_api.update.return_value

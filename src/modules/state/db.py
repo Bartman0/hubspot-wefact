@@ -7,6 +7,7 @@ from modules.models.invoice import Invoice
 
 INVOICE_STATUS_OPEN = "open"
 INVOICE_STATUS_PAID = "paid"
+INVOICE_STATUS_VOIDED = "voided"
 INVOICE_STATUS_UNKNOWN = "unknown"
 
 ACTION_OPEN = INVOICE_STATUS_OPEN
