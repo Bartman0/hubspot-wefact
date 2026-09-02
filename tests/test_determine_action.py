@@ -11,6 +11,7 @@ from modules.state.db import (
     INVOICE_STATUS_OPEN,
     INVOICE_STATUS_PAID,
     INVOICE_STATUS_UNKNOWN,
+    INVOICE_STATUS_VOIDED,
 )
 
 
@@ -57,3 +58,38 @@ def test_open_invoice_with_paid_db_is_inconsistent_and_raises():
     # Regressing from paid back to open should never happen; guard it.
     with pytest.raises(ValueError):
         _determine_action(INVOICE_STATUS_PAID, invoice(INVOICE_STATUS_OPEN))
+
+
+class TestVoidedInDb:
+    """Once the state database records an invoice as voided, it is final.
+
+    determine_db_status reports voided in preference to paid and open, so this
+    db status reaches _determine_action for any HubSpot status the invoice may
+    have picked up since. Every one of them has to skip: falling through to the
+    ValueError would end the whole sync run over a single stale invoice, taking
+    the rest of the page and every later page with it.
+    """
+
+    @pytest.mark.parametrize(
+        "hubspot_status",
+        [INVOICE_STATUS_OPEN, INVOICE_STATUS_PAID, INVOICE_STATUS_VOIDED, "draft"],
+    )
+    def test_voided_db_status_always_skips(self, hubspot_status):
+        """No HubSpot status can pull a voided invoice back into the sync."""
+        assert _determine_action(INVOICE_STATUS_VOIDED, invoice(hubspot_status)) == ACTION_SKIP
+
+    def test_reopened_invoice_does_not_end_the_run(self):
+        """The regression that motivated the guard: voided here, open again in HubSpot.
+
+        Reached when WeFact reported Vervallen, main wrote voided to HubSpot and
+        recorded it, and someone then reopened the invoice in HubSpot.
+        """
+        assert _determine_action(INVOICE_STATUS_VOIDED, invoice(INVOICE_STATUS_OPEN)) == ACTION_SKIP
+
+    def test_late_payment_does_not_end_the_run(self):
+        """An overdue invoice paid after it was voided must not raise either.
+
+        WeFact Vervallen means the payment term expired, not that the invoice
+        was cancelled, so it can still be settled afterwards.
+        """
+        assert _determine_action(INVOICE_STATUS_VOIDED, invoice(INVOICE_STATUS_PAID)) == ACTION_SKIP

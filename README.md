@@ -24,14 +24,15 @@ HubSpot invoices ──> state db check                  └──> invoice PDF 
 For each invoice on a page of HubSpot results:
 
 1. **Look up progress.** `src/modules/state/db.py` reports what was already
-   synced for this invoice number: `unknown`, `open` or `paid`. An invoice keeps
-   one row per status it passed through and the most advanced one wins, so
-   `paid` beats `open` beats `unknown`.
+   synced for this invoice number: `unknown`, `open`, `paid` or `voided`. An
+   invoice keeps one row per status it passed through and the most advanced one
+   wins, so `voided` beats `paid` beats `open` beats `unknown`.
 
 2. **Decide the action** (`_determine_action` in `src/main.py`):
 
    | HubSpot status | state db | action                                                          |
    | -------------- | -------- | --------------------------------------------------------------- |
+   | anything       | `voided` | voided is final, skip                                            |
    | `open`         | unknown  | create it in WeFact                                              |
    | `paid`         | unknown  | create it in WeFact                                              |
    | `open`         | `open`   | ask WeFact what happened to it and carry that back to HubSpot    |
@@ -39,6 +40,11 @@ For each invoice on a page of HubSpot results:
    | `paid`         | `paid`   | fully settled, skip                                              |
    | anything else  | –        | not synced, skip (e.g. `draft`, `voided`)                        |
    | `open`         | `paid`   | raises `ValueError` and aborts the run: an invoice cannot regress |
+
+   The `voided` row comes first because it is checked first, and it has to be:
+   an invoice voided by an earlier run and since reopened or paid in HubSpot
+   would otherwise fall through to that `ValueError`, ending the whole run over
+   one stale invoice.
 
 ### Creating the invoice in WeFact
 
@@ -83,9 +89,14 @@ Adding another status is a single entry in `WEFACT_STATUS_TO_HUBSPOT`; the write
 itself is `set_invoice_status`, which takes the HubSpot status as an argument.
 
 The state database row written here carries the new HubSpot status, so a `voided`
-row can end up in it. `determine_db_status` only looks for `open` and `paid`, so
-such a row is never read back; the invoice is skipped on later runs because
-HubSpot reports `voided`, which is not a status the sync handles.
+row can end up in it. `determine_db_status` reports that row in preference to
+`paid` and `open`, and `_determine_action` skips on it, so a voided invoice stays
+out of the sync from then on whatever HubSpot later reports for it.
+
+That last part matters because WeFact *Vervallen* means the payment term
+expired, not that the invoice was cancelled — an overdue invoice can still be
+settled afterwards. Once it has been voided here, a late payment is not carried
+back to HubSpot.
 
 ### The paid/open no-op
 
